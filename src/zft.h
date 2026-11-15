@@ -1,0 +1,155 @@
+/* ************************************************************************** */
+/*  zft — libft tester (C rewrite, inspired by github.com/Caesarovich/zft)    */
+/*  Framework header: test registration, assertions, helpers.                 */
+/* ************************************************************************** */
+#ifndef ZFT_H
+# define ZFT_H
+
+# ifndef _GNU_SOURCE
+#  define _GNU_SOURCE
+# endif
+# include <stddef.h>
+# include <stdint.h>
+# include <stdio.h>
+# include <stdlib.h>
+# include <string.h>
+# include <strings.h>
+# include <limits.h>
+# include <unistd.h>
+# include <ctype.h>
+# include "libft_decl.h"
+# include "refs.h"
+
+/* ---------------------------------------------------------------- kinds -- */
+typedef enum e_kind
+{
+	K_NORMAL,	/* assertions only; a crash is an error                      */
+	K_VSREF,	/* run ft and the reference (real libc) in two processes and  */
+				/* compare crash behaviour + output                           */
+	K_MALLOC	/* run again with each malloc failing in turn                 */
+}	t_kind;
+
+typedef struct s_test
+{
+	const char	*func;
+	const char	*name;
+	t_kind		kind;
+	int			spec;	/* NORMAL: whole test speculative.
+						   VSREF : an output mismatch is only speculative     */
+	void		(*fn)(void);
+	const char	*file;
+	int			line;
+	int			seq;
+}	t_test;
+
+void	zft_register(const char *func, const char *name, t_kind kind, int spec,
+			void (*fn)(void), const char *file, int line);
+
+# define ZFT_CAT2(a, b) a##b
+# define ZFT_CAT(a, b) ZFT_CAT2(a, b)
+
+# define TEST_EX(F, NAME, KIND, SPEC) TEST_EX2(F, NAME, KIND, SPEC, __COUNTER__)
+# define TEST_EX2(F, NAME, KIND, SPEC, N) \
+	static void ZFT_CAT(zt_fn_, N)(void); \
+	__attribute__((constructor)) static void ZFT_CAT(zt_reg_, N)(void) \
+	{ zft_register(#F, NAME, KIND, SPEC, ZFT_CAT(zt_fn_, N), \
+		__FILE__, __LINE__); } \
+	static void ZFT_CAT(zt_fn_, N)(void)
+
+/* Plain test with assertions.                                              */
+# define TEST(F, NAME)      TEST_EX(F, NAME, K_NORMAL, 0)
+/* Plain test whose expectation is not required by the subject.             */
+# define SPEC_TEST(F, NAME) TEST_EX(F, NAME, K_NORMAL, 1)
+/* ft vs real function. Crash rules:
+     ft crash  + real crash  -> OK (same behaviour as the original)
+     ft crash  + real ok     -> ERROR (even without --speculative)
+     ft ok     + real crash  -> SPECULATIVE error (you protect, the libc does not)
+     ft ok     + real ok     -> outputs (OUT) must match                       */
+# define VS(F, NAME)        TEST_EX(F, NAME, K_VSREF, 0)
+/* Same, but a mismatch of the outputs is only speculative (UB territory).  */
+# define VS_SPEC(F, NAME)   TEST_EX(F, NAME, K_VSREF, 1)
+/* Runs once to count mallocs done between ARM()/DISARM(), then once per
+   malloc with that malloc returning NULL. Crash or leak = error.            */
+# define MTEST(F, NAME)     TEST_EX(F, NAME, K_MALLOC, 0)
+
+/* -------------------------------------------------------- runtime state -- */
+extern int	g_ref;			/* 1 while running the reference implementation */
+extern int	g_fail_at;		/* index of the malloc that must fail (0 = none) */
+extern int	g_armed;		/* count mallocs only between ARM/DISARM         */
+
+# define REF (g_ref)
+# define FAILING (g_fail_at > 0)
+/* Pick the function to call: PICK(ft_strlen, r_strlen)(s)                   */
+# define PICK(ft, ref) (g_ref ? (ref) : (ft))
+# define ARM() (g_armed = 1)
+# define DISARM() (g_armed = 0)
+
+/* ----------------------------------------------------------- assertions -- */
+__attribute__((noreturn)) void	zft_fail(const char *file, int line,
+			const char *expr, const char *expected, const char *got);
+__attribute__((noreturn, format(printf, 3, 4))) void	zft_failf(
+			const char *file, int line, const char *fmt, ...);
+__attribute__((format(printf, 1, 2))) void	zft_out(const char *fmt, ...);
+__attribute__((format(printf, 1, 2))) void	zft_input(const char *fmt, ...);
+void	zft_esc(char *dst, size_t dsz, const char *s, size_t n);
+const char	*zft_str(const char *s);	/* escaped "..." or NULL (ring buffer) */
+const char	*zft_mem(const void *p, size_t n);	/* hex dump (ring buffer)  */
+
+/* Record a value for comparison with the reference (VS tests).             */
+# define OUT(...) zft_out(__VA_ARGS__)
+/* Describe the current input (shown when the test fails or crashes).       */
+# define INPUT(...) zft_input(__VA_ARGS__)
+
+# define CHECK(cond, ...) do { if (!(cond)) \
+	zft_failf(__FILE__, __LINE__, __VA_ARGS__); } while (0)
+
+# define EQ_INT(got, exp) do { long long _g = (long long)(got); \
+	long long _e = (long long)(exp); if (_g != _e) { char _a[64], _b[64]; \
+	snprintf(_a, 64, "%lld", _e); snprintf(_b, 64, "%lld", _g); \
+	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+
+# define EQ_SZ(got, exp) do { size_t _g = (size_t)(got); \
+	size_t _e = (size_t)(exp); if (_g != _e) { char _a[64], _b[64]; \
+	snprintf(_a, 64, "%zu", _e); snprintf(_b, 64, "%zu", _g); \
+	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+
+# define EQ_PTR(got, exp) do { const void *_g = (const void *)(got); \
+	const void *_e = (const void *)(exp); if (_g != _e) { char _a[64], _b[64]; \
+	snprintf(_a, 64, "%p", _e); snprintf(_b, 64, "%p", _g); \
+	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+
+# define EQ_STR(got, exp) do { const char *_g = (got); const char *_e = (exp); \
+	if ((_g == NULL) != (_e == NULL) || (_g && strcmp(_g, _e) != 0)) \
+	zft_fail(__FILE__, __LINE__, #got, zft_str(_e), zft_str(_g)); } while (0)
+
+# define EQ_MEM(got, exp, n) do { const void *_g = (got); const void *_e = (exp);\
+	size_t _n = (n); if (memcmp(_g, _e, _n) != 0) \
+	zft_fail(__FILE__, __LINE__, #got, zft_mem(_e, _n), zft_mem(_g, _n)); \
+	} while (0)
+
+# define SIGN(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))
+
+/* -------------------------------------------------------- memory helpers -- */
+/* Guarded copies: the byte right after the data is an unmapped page, so any
+   read past the end segfaults.                                             */
+char	*gstr(const char *s);			/* "abc\0" + guard                  */
+void	*gmem(const void *src, size_t n);	/* n bytes + guard (no '\0' added)  */
+void	*gbuf(size_t n, int fill);			/* n bytes filled with fill + guard */
+/* Size of the malloc block starting exactly at p, or (size_t)-1 if p is not
+   the start of a live block allocated through malloc().                    */
+size_t	alloc_size(const void *p);
+int		zm_live_blocks(void);
+void	real_free(void *p);				/* free memory allocated by the libc */
+/* free() something returned by either ft_ (tracked) or the real libc       */
+# define XFREE(p) (g_ref ? real_free(p) : free(p))
+
+/* fd capture: returns a fd writing into a temp file; read it back with
+   cap_read (returns a static, NUL-terminated buffer and its length).        */
+int			cap_open(void);
+const char	*cap_read(int fd, size_t *len);
+
+/* deterministic PRNG */
+uint32_t	zrand(void);
+void		zsrand(uint32_t seed);
+
+#endif
