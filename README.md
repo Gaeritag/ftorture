@@ -1,4 +1,4 @@
-# 🔥 ftorture — 42 tester: libft & ft_printf
+# 🔥 ftorture — 42 tester: libft, ft_printf & get_next_line
 
 🇫🇷 [Version française](README.fr.md)
 
@@ -12,6 +12,7 @@ and what it reads outside its memory.
 |---|---|---|
 | **libft** | v19.3 | all 43 functions (parts 1, 2 and 3), ~400 tests + fuzzing |
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, width, `# +`, ~22,000 calls compared with `printf` |
+| **get_next_line** | v14.3 | 14 `BUFFER_SIZE`s, files, stdin, pipe, `read` errors, multi-fd bonus |
 
 Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft), rewritten in C:
 nothing to download, you only need `cc`, `make` and `nm`. Built for **Linux** (42 machines).
@@ -38,8 +39,9 @@ torture
 
 The logo stays at the top of every screen:
 
-1. **project**: `LIBFT` or `FT_PRINTF` (`↑ ↓` or `1` `2`, Enter). If the current folder
-   contains a `libft.h` or a `ft_printf.h`, it is preselected.
+1. **project**: `LIBFT`, `FT_PRINTF` or `GNL` (`↑ ↓` or `1` `2` `3`, Enter). If the
+   current folder contains a `libft.h`, a `ft_printf.h` or a `get_next_line.h`, it is
+   preselected.
 2. **path** to the project (Tab completes).
 3. **options** to tick (Space): strict mode, verbose, checks, norminette, then
    `▶ LANCER LA TORTURE`.
@@ -49,29 +51,32 @@ The logo stays at the top of every screen:
 ```bash
 torture libft ~/libft                # a libft
 torture printf ~/ft_printf           # a ft_printf (mandatory + bonus)
+torture gnl ~/get_next_line          # a get_next_line (every BUFFER_SIZE)
 torture ~/ft_printf -s               # project detected automatically
 torture libft -f split,itoa -v       # a few functions, with every detail
 torture printf -f %d,"flag -"        # a few conversions / flags
 torture printf -p 1                  # mandatory part only
+torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 ```
 
 | Option | Effect |
 |---|---|
 | `-s`, `--speculative` | speculative errors (▲) make the run fail |
 | `-v`, `--verbose` | show the details of every failure |
-| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` |
-| `-p`, `--part N` | libft: 1, 2 or 3 · printf: 1 (mandatory) or 2 (bonus) |
+| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) |
+| `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
 | `--seed N` | fuzzing seed (default 42) |
-| `--timeout S` | per-test timeout (default 3 s) |
+| `--timeout S` | per-test timeout (default 3 s, 10 s for gnl) |
 | `--no-color` | no colors |
 
-At the end, ftorture runs your project's `make clean`, even after an error or a Ctrl-C:
-no `.o` file is left behind. A full plain-text report is written to `ftorture.log`, in
+At the end, ftorture runs your project's `make clean` (libft, ft_printf), even after an
+error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
+ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
 
-## Checks (both projects)
+## Checks (libft and ft_printf)
 
 | Area | Details |
 |---|---|
@@ -114,6 +119,37 @@ byte by byte** (including the `\0` of `%c`) and the **return value**.
 If your Makefile has no `bonus` rule, only the mandatory part is tested and the summary
 says so.
 
+## get_next_line
+
+This project has no Makefile: ftorture compiles your files itself, in its `build/`
+folder (nothing is written in your repository), **once per `BUFFER_SIZE`**. Each size
+is one line of the report: 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100,000,
+10,000,000, the default value (no `-D`), and 0.
+
+- **Contents**: empty file, one line with or without `\n`, only `\n`, lines of
+  `BUFFER_SIZE - 1`, `BUFFER_SIZE` and `BUFFER_SIZE + 1` characters, lines of 10,000 and
+  100,000 characters, 5,000 one-character lines, a ~80 KB file, non-ASCII characters.
+- **Every returned line** is compared with the expected one and must be a large enough
+  `malloc` block (not a pointer into a `static` buffer); after the last line,
+  `get_next_line` must return `NULL`, then `NULL` again.
+- **Other fds**: standard input, a **pipe** fed in small chunks (partial `read`s), fd
+  `-1`, never opened or closed, a directory.
+- **Errors**: a `read()` returning `-1` in the middle of the file (it must return
+  `NULL`, then start cleanly on a new file), failing mallocs, leaks.
+- **"Reads as little as possible"**: `read` is instrumented; reading the whole file to
+  return the first line is an error.
+- **Bonus** (`_bonus` files): files read in turn, one file ending before the others,
+  fd 1000, stdin, 50 files open at once, invalid fds between two reads, and **a single
+  `static` variable** (checked with `nm`). The mandatory tests also run on the bonus
+  version.
+- **Checks**: the 3 files to submit (+ the 3 `_bonus` ones), compilation with
+  `-Wall -Wextra -Werror -D BUFFER_SIZE=42` **and without `-D`**, only `read`, `malloc`,
+  `free` (`lseek` and the libft are forbidden), no global variable, norminette,
+  prototype, README with the algorithm.
+
+`BUFFER_SIZE=0` and `BUFFER_SIZE=10000000` count as ▲: the subject asks the question
+(a 10 MB buffer on the stack crashes); you need to be able to explain it.
+
 ## Your function vs the real one
 
 For twisted inputs (NULL, `n = 0`, overflows…), ftorture runs **your** function and the
@@ -151,6 +187,7 @@ defend them during your evaluation.
 src/engine.c, memtrack.c, zft.h   shared engine (fork, guarded memory, report)
 src/libft/                        libft tests (t_part1-3.c) + references
 src/printf/                       ft_printf tests (t_printf.c, t_printf_bonus.c)
+src/gnl/                          get_next_line tests (t_gnl.c, t_gnl_bonus.c)
 protos/                           expected prototypes
 ```
 
@@ -179,6 +216,19 @@ TEST(pf_d, "my test")
 SPEC_TEST(pf_undef, "undefined case")
 {
 	PF("%05s", "ab");           /* ▲ only if it differs from glibc */
+}
+```
+
+**get_next_line** (`GNL_SUITE` = the line of the current BUFFER_SIZE):
+
+```c
+TEST(GNL_SUITE, "my test")
+{
+	static const char	d[] = "a\nb\n";
+	int					fd = gnl_file(d, sizeof(d) - 1);
+
+	EXPECT_FD(fd, d, sizeof(d) - 1, "my file");   /* every line + NULL */
+	close(fd);
 }
 ```
 

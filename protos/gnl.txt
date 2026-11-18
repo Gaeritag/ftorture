@@ -1,0 +1,3 @@
+# name|function pointer type (checked with __builtin_types_compatible_p)|prototype shown
+# get_next_line subject v14.3
+get_next_line|char *(*)(int)|char *get_next_line(int fd);

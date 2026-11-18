@@ -55,7 +55,7 @@ header_art() {
 
 	local blink=""
 	[ -n "$COLOR" ] && blink="${esc}[5m"
-	printf '   %s▚▚ %s ▞▞%s\n' "$PHM" "${SUBTITLE:-42 TESTER · LIBFT v19.3 · FT_PRINTF v12.1 · LINUX}" "$X"
+	printf '   %s▚▚ %s ▞▞%s\n' "$PHM" "${SUBTITLE:-42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE}" "$X"
 	printf '   %s%s%s%s%s_%s\n\n' "$PH" "${TAG:-> ton code va parler}" "$X" "$blink" "$PH" "$X"
 }
 

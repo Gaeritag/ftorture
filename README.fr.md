@@ -1,4 +1,4 @@
-# 🔥 ftorture — testeur 42 : libft & ft_printf
+# 🔥 ftorture — testeur 42 : libft, ft_printf & get_next_line
 
 🇬🇧 [English version](README.md)
 
@@ -12,6 +12,7 @@ qu'il fuit et ce qu'il lit en dehors de sa mémoire.
 |---|---|---|
 | **libft** | v19.3 | les 43 fonctions (parties 1, 2 et 3), ~400 tests + fuzzing |
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, largeur, `# +`, ~22 000 appels comparés à `printf` |
+| **get_next_line** | v14.3 | 14 `BUFFER_SIZE`, fichiers, stdin, pipe, erreurs de `read`, bonus multi-fd |
 
 Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft), réécrit en C : rien à
 télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes 42).
@@ -36,8 +37,9 @@ torture
 
 Le logo reste en haut de chaque écran :
 
-1. **projet** : `LIBFT` ou `FT_PRINTF` (`↑ ↓` ou `1` `2`, Entrée). Si le dossier courant
-   contient un `libft.h` ou un `ft_printf.h`, il est présélectionné.
+1. **projet** : `LIBFT`, `FT_PRINTF` ou `GNL` (`↑ ↓` ou `1` `2` `3`, Entrée). Si le
+   dossier courant contient un `libft.h`, un `ft_printf.h` ou un `get_next_line.h`, il
+   est présélectionné.
 2. **chemin** du projet (Tab pour compléter).
 3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette,
    puis `▶ LANCER LA TORTURE`.
@@ -47,29 +49,32 @@ Le logo reste en haut de chaque écran :
 ```bash
 torture libft ~/libft                # une libft
 torture printf ~/ft_printf           # un ft_printf (obligatoire + bonus)
+torture gnl ~/get_next_line          # une get_next_line (tous les BUFFER_SIZE)
 torture ~/ft_printf -s               # projet détecté tout seul
 torture libft -f split,itoa -v       # quelques fonctions, avec tous les détails
 torture printf -f %d,"flag -"        # quelques conversions / flags
 torture printf -p 1                  # seulement la partie obligatoire
+torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 ```
 
 | Option | Effet |
 |---|---|
 | `-s`, `--speculative` | les erreurs spéculatives (▲) font échouer |
 | `-v`, `--verbose` | affiche le détail de chaque échec |
-| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` |
-| `-p`, `--part N` | libft : 1, 2 ou 3 · printf : 1 (obligatoire) ou 2 (bonus) |
+| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) |
+| `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
 | `--seed N` | graine du fuzzing (42 par défaut) |
-| `--timeout S` | timeout par test (3 s par défaut) |
+| `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl) |
 | `--no-color` | sans couleurs |
 
-À la fin, ftorture lance le `make clean` de ton projet, même après une erreur ou un
-Ctrl-C : il ne reste aucun `.o`. Le rapport complet sans couleurs est écrit dans
+À la fin, ftorture lance le `make clean` de ton projet (libft, ft_printf), même après
+une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
+dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
 
-## Vérifications (les deux projets)
+## Vérifications (libft et ft_printf)
 
 | Bloc | Détail |
 |---|---|
@@ -113,6 +118,38 @@ octet par octet** (y compris les `\0` de `%c`) et la **valeur de retour**.
 Si ton Makefile n'a pas de règle `bonus`, seule la partie obligatoire est testée et le
 résumé le dit.
 
+## get_next_line
+
+Pas de Makefile dans ce projet : ftorture compile tes fichiers lui-même, dans son dossier
+`build/` (rien n'est écrit dans ton dépôt), **une fois par `BUFFER_SIZE`**. Chaque taille
+donne une ligne du rapport : 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100 000,
+10 000 000, la valeur par défaut (sans `-D`), et 0.
+
+- **Contenus** : fichier vide, une ligne avec ou sans `\n`, que des `\n`, lignes de
+  `BUFFER_SIZE - 1`, `BUFFER_SIZE` et `BUFFER_SIZE + 1` caractères, lignes de 10 000 et
+  100 000 caractères, 5 000 lignes d'un caractère, gros fichier de ~80 Ko, caractères
+  non-ASCII.
+- **Chaque ligne renvoyée** est comparée à celle attendue, doit être un bloc `malloc`
+  assez grand (pas un pointeur vers un buffer `static`) ; après la dernière ligne,
+  `get_next_line` doit renvoyer `NULL`, puis encore `NULL`.
+- **Autres fd** : entrée standard, **pipe** alimenté par petits morceaux (des `read`
+  partiels), fd `-1`, jamais ouvert ou fermé, dossier.
+- **Erreurs** : un `read()` qui renvoie `-1` au milieu du fichier (il faut renvoyer
+  `NULL`, puis repartir proprement sur un nouveau fichier), malloc défaillant, fuites.
+- **« Lit le minimum »** : `read` est instrumenté, et lire tout le fichier pour renvoyer
+  la première ligne est une erreur.
+- **Bonus** (fichiers `_bonus`) : fichiers lus en alternance, un fichier fini avant les
+  autres, fd 1000, stdin, 50 fichiers ouverts en même temps, fd invalides entre deux
+  lectures, et **une seule variable `static`** (vérifié avec `nm`). Les tests obligatoires
+  tournent aussi sur la version bonus.
+- **Vérifications** : les 3 fichiers à rendre (+ les 3 `_bonus`), compilation avec
+  `-Wall -Wextra -Werror -D BUFFER_SIZE=42` **et sans `-D`**, uniquement `read`, `malloc`,
+  `free` (`lseek` et la libft sont interdits), pas de variable globale, norminette,
+  prototype, README avec l'algorithme.
+
+`BUFFER_SIZE=0` et `BUFFER_SIZE=10000000` comptent comme ▲ : le sujet pose la question
+(un buffer de 10 Mo sur la pile crashe), à toi de savoir l'expliquer.
+
 ## Ta fonction face à la vraie
 
 Pour les entrées tordues (NULL, `n = 0`, dépassements…), ftorture lance **ta**
@@ -150,6 +187,7 @@ de savoir les défendre en correction.
 src/engine.c, memtrack.c, zft.h   moteur commun (fork, mémoire gardée, rapport)
 src/libft/                        tests libft (t_part1-3.c) + références
 src/printf/                       tests ft_printf (t_printf.c, t_printf_bonus.c)
+src/gnl/                          tests get_next_line (t_gnl.c, t_gnl_bonus.c)
 protos/                           prototypes attendus
 ```
 
@@ -178,6 +216,19 @@ TEST(pf_d, "mon test")
 SPEC_TEST(pf_undef, "cas indéfini")
 {
 	PF("%05s", "ab");           /* ▲ seulement si différent de la glibc */
+}
+```
+
+**get_next_line** (`GNL_SUITE` = la ligne du BUFFER_SIZE en cours) :
+
+```c
+TEST(GNL_SUITE, "mon test")
+{
+	static const char	d[] = "a\nb\n";
+	int					fd = gnl_file(d, sizeof(d) - 1);
+
+	EXPECT_FD(fd, d, sizeof(d) - 1, "mon fichier");   /* toutes les lignes + NULL */
+	close(fd);
 }
 ```
 

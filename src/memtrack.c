@@ -37,6 +37,8 @@ typedef struct s_blk
 static t_blk	g_tab[TAB];
 static unsigned	g_used;
 static unsigned	g_freed_maps;
+static uintptr_t	g_lo;	/* address range covered by guarded mappings */
+static uintptr_t	g_hi;
 static size_t	g_page;
 
 int		g_zm_active;		/* set in the test process only */
@@ -130,7 +132,19 @@ void	*__wrap_malloc(size_t n)
 	b->maplen = len;
 	b->size = n;
 	b->state = 1;
-	memset(base + len - pg - n, 0xA5, n);	/* malloc is not calloc */
+	if (!g_lo || (uintptr_t)base < g_lo)
+		g_lo = (uintptr_t)base;
+	if ((uintptr_t)base + len > g_hi)
+		g_hi = (uintptr_t)base + len;
+	/* malloc is not calloc: poison the block (only both ends of big ones,
+	   e.g. a 10 MB BUFFER_SIZE allocated on every call)                  */
+	if (n <= 65536)
+		memset(base + len - pg - n, 0xA5, n);
+	else
+	{
+		memset(base + len - pg - n, 0xA5, 4096);
+		memset(base + len - pg - 4096, 0xA5, 4096);
+	}
 	return (base + len - pg - n);
 }
 
@@ -138,6 +152,9 @@ static int	inside_block(uintptr_t p)
 {
 	unsigned	i;
 
+	/* fast path: outside every guarded mapping ever made (libc heap...) */
+	if (p < g_lo || p >= g_hi)
+		return (0);
 	for (i = 0; i < TAB; i++)
 		if (g_tab[i].state && p > g_tab[i].user
 			&& p < (uintptr_t)g_tab[i].base + g_tab[i].maplen)

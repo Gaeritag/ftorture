@@ -45,8 +45,10 @@ static struct s_opt
 	const char	*stats_out;		/* save counters for a later run        */
 	const char	*stats_in;		/* load counters from a previous run    */
 	const char	*note;			/* extra line in the summary box        */
+	int			spec_pass;		/* every failure of this run is a ▲     */
+	int			no_section;		/* chained run: part header already out */
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL};
+	NULL, 0, 0};
 
 static FILE	*g_log;
 
@@ -999,6 +1001,8 @@ static void	run_function(int fi, int *ti)
 			eval_malloc(&g_tests[i], i - start + 1, r);
 		else
 			eval_normal(&g_tests[i], i - start + 1, r);
+		if (o.spec_pass && r->res == R_FAIL)
+			r->res = R_SPEC;
 		if (r->res == R_PASS)
 			fs->pass++;
 		else if (r->res == R_PASS_CRASH)
@@ -1338,6 +1342,10 @@ int	main(int ac, char **av)
 			o.stats_in = av[++i];
 		else if (!strcmp(a, "--note") && i + 1 < ac)
 			o.note = av[++i];
+		else if (!strcmp(a, "--spec-pass"))
+			o.spec_pass = 1;
+		else if (!strcmp(a, "--no-section"))
+			o.no_section = 1;
 		else
 		{
 			usage();
@@ -1375,7 +1383,7 @@ int	main(int ac, char **av)
 			for (j = i; j < NFUNCS && g_funcs[j].part == g_funcs[i].part; j++)
 				any |= selected(&g_funcs[j]);
 			part = g_funcs[i].part;
-			if (any)
+			if (any && !o.no_section)
 			{
 				snprintf(title, sizeof(title), "PARTIE %d · %s", part,
 					g_part_names[part]);

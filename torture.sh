@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # **************************************************************************** #
-#  ftorture — 42 tester: libft (v19.3) & ft_printf (v12.1), Linux              #
+#  ftorture — 42 tester: libft v19.3, ft_printf v12.1, get_next_line v14.3   #
 #                                                                              #
 #  torture                       interactive menu (TUI)                        #
 #  torture libft  [dir] [opts]   test a libft                                  #
 #  torture printf [dir] [opts]   test a ft_printf (mandatory + bonus)          #
+#  torture gnl    [dir] [opts]   test a get_next_line (every BUFFER_SIZE)      #
 #  torture [dir] [opts]          project detected from the files in dir       #
 # **************************************************************************** #
 
@@ -19,6 +20,8 @@ SPEC=0
 VERBOSE=0
 SEED=42
 PART=""
+FUNC_FILTER=""
+TIMEOUT=""
 NARGS=$#
 
 usage() {
@@ -26,12 +29,14 @@ usage() {
 usage: torture                         menu interactif
        torture libft  [dossier] [options]
        torture printf [dossier] [options]
-       torture [dossier] [options]     (libft ou ft_printf détecté)
+       torture gnl    [dossier] [options]
+       torture [dossier] [options]     (projet détecté)
 
   -s, --speculative   les erreurs spéculatives (▲) comptent comme des erreurs
   -v, --verbose       affiche le détail de chaque échec
   -f, --func LISTE    libft : split,itoa,ft_strlcat · printf : %d,%s,flag -
-  -p, --part N        libft : 1, 2 ou 3 · printf : 1 (obligatoire) ou 2 (bonus)
+                      gnl : liste de BUFFER_SIZE, ex. 1,42,9999
+  -p, --part N        libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus)
       --no-checks     saute les vérifications (Makefile, norme, protos, nm…)
       --no-norm       saute norminette
       --seed N        graine des tests aléatoires (défaut 42)
@@ -51,12 +56,13 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		libft) PROJ=libft ;;
 		printf|ft_printf) PROJ=printf ;;
+		gnl|get_next_line) PROJ=gnl ;;
 		-s|--speculative) SPEC=1 ;;
 		-v|--verbose) VERBOSE=1 ;;
-		-f|--func) PASS+=("-f" "$2"); shift ;;
+		-f|--func) FUNC_FILTER="$2"; shift ;;
 		-p|--part) PART="$2"; shift ;;
 		--seed) SEED="$2"; shift ;;
-		--timeout) PASS+=("--timeout" "$2"); shift ;;
+		--timeout) TIMEOUT="$2"; shift ;;
 		--no-color) export NO_COLOR=1 ;;
 		--no-checks) DO_CHECKS=0 ;;
 		--no-norm) DO_NORM=0 ;;
@@ -86,14 +92,20 @@ cls() { [ -t 1 ] && printf '\033[H\033[2J\033[3J'; }
 
 # ------------------------------------------------------------- projects --
 detect_project() {
-	if [ -f "$1/ft_printf.h" ]; then echo printf
+	if [ -f "$1/get_next_line.h" ]; then echo gnl
+	elif [ -f "$1/ft_printf.h" ]; then echo printf
 	elif [ -f "$1/libft.h" ]; then echo libft
 	fi
 }
 
 set_project() {
 	PROJ="$1"
-	if [ "$PROJ" = printf ]; then
+	if [ "$PROJ" = gnl ]; then
+		PROJ_LABEL="get_next_line"
+		ARCHIVE="get_next_line.c"; HDR="get_next_line.h"; SRC_SUB="gnl"
+		PROTOS="$FT_DIR/protos/gnl.txt"; FUNCS=(get_next_line)
+		SUBTITLE="GET_NEXT_LINE · SUJET v14.3 · LINUX"; TAG="> ta gnl va parler"
+	elif [ "$PROJ" = printf ]; then
 		PROJ_LABEL="ft_printf"
 		ARCHIVE="libftprintf.a"; HDR="ft_printf.h"; SRC_SUB="printf"
 		PROTOS="$FT_DIR/protos/printf.txt"; FUNCS=(ft_printf)
@@ -144,32 +156,39 @@ menu_line() {   # $1 selected? $2 label $3 description
 
 tui_project() {
 	local sel=0 k
-	local labels=("LIBFT" "FT_PRINTF" "QUITTER")
+	local labels=("LIBFT" "FT_PRINTF" "GNL" "QUITTER")
 	local descs=("libft.a · 43 fonctions · parties 1, 2, 3"
-		"libftprintf.a · cspdiuxX% · bonus -0. largeur # +" "")
+		"libftprintf.a · cspdiuxX% · bonus -0. largeur # +"
+		"get_next_line · 14 BUFFER_SIZE · bonus multi-fd" "")
 	local guess
 	guess="$(detect_project "$PWD")"
 	[ "$guess" = printf ] && sel=1
+	[ "$guess" = gnl ] && sel=2
 	while true; do
 		cls
 		SUBTITLE="" TAG="" header_art
 		printf '   %sQUEL PROJET ON TORTURE ?%s\n\n' "$B$PH" "$X"
-		for i in 0 1 2; do
+		for i in 0 1 2 3; do
 			menu_line "$([ $i = $sel ] && echo 1)" "${labels[$i]}" "${descs[$i]}"
 		done
-		printf '\n   %s↑ ↓ choisir · Entrée valider · 1 2 raccourcis · q quitter%s\n' "$PHD" "$X"
-		[ -n "$guess" ] && printf '   %s(dossier courant : %s détecté)%s\n' "$PHD" "$([ "$guess" = printf ] && echo ft_printf || echo libft)" "$X"
+		printf '\n   %s↑ ↓ choisir · Entrée valider · 1 2 3 raccourcis · q quitter%s\n' "$PHD" "$X"
+		[ -n "$guess" ] && printf '   %s(dossier courant : %s détecté)%s\n' "$PHD" "$guess" "$X"
 		k="$(read_key)"
 		case "$k" in
-			up) sel=$(((sel + 2) % 3)) ;;
-			down) sel=$(((sel + 1) % 3)) ;;
+			up) sel=$(((sel + 3) % 4)) ;;
+			down) sel=$(((sel + 1) % 4)) ;;
 			n1) sel=0; k=enter ;;
 			n2) sel=1; k=enter ;;
+			n3) sel=2; k=enter ;;
 			quit) cls; exit 0 ;;
 		esac
 		if [ "$k" = enter ]; then
-			[ $sel = 2 ] && { cls; exit 0; }
-			[ $sel = 0 ] && set_project libft || set_project printf
+			[ $sel = 3 ] && { cls; exit 0; }
+			case $sel in
+				0) set_project libft ;;
+				1) set_project printf ;;
+				2) set_project gnl ;;
+			esac
 			return
 		fi
 	done
@@ -180,6 +199,7 @@ tui_path() {
 	if [ -f "$PWD/$HDR" ]; then def="$PWD"
 	elif [ "$PROJ" = libft ] && [ -f "$HOME/libft/$HDR" ]; then def="$HOME/libft"
 	elif [ "$PROJ" = printf ] && [ -f "$HOME/ft_printf/$HDR" ]; then def="$HOME/ft_printf"
+	elif [ "$PROJ" = gnl ] && [ -f "$HOME/get_next_line/$HDR" ]; then def="$HOME/get_next_line"
 	else def="$PWD"
 	fi
 	while true; do
@@ -193,7 +213,7 @@ tui_path() {
 		printf '\033[?25l'
 		DIR="${DIR/#\~/$HOME}"
 		if [ ! -d "$DIR" ]; then err="dossier introuvable : $DIR"
-		elif [ ! -f "$DIR/Makefile" ]; then err="pas de Makefile dans $DIR"
+		elif [ "$PROJ" != gnl ] && [ ! -f "$DIR/Makefile" ]; then err="pas de Makefile dans $DIR"
 		elif [ ! -f "$DIR/$HDR" ]; then err="pas de $HDR dans $DIR"
 		else return
 		fi
@@ -258,13 +278,15 @@ fi
 DIR="$(cd "$DIR" 2>/dev/null && pwd)" || die "dossier introuvable"
 if [ -z "$PROJ" ]; then
 	PROJ="$(detect_project "$DIR")"
-	[ -z "$PROJ" ] && die "ni libft.h ni ft_printf.h dans $DIR (précise : torture libft | torture printf)"
+	[ -z "$PROJ" ] && die "ni libft.h, ni ft_printf.h, ni get_next_line.h dans $DIR (précise : torture libft | printf | gnl)"
 fi
 set_project "$PROJ"
 [ "$SPEC" = 1 ] && PASS+=("-s")
 [ "$VERBOSE" = 1 ] && PASS+=("-v")
 PASS+=("--seed" "$SEED")
 [ -n "$NO_COLOR" ] && PASS+=("--no-color")
+[ -n "$FUNC_FILTER" ] && [ "$PROJ" != gnl ] && PASS+=("-f" "$FUNC_FILTER")
+[ -n "$TIMEOUT" ] && PASS+=("--timeout" "$TIMEOUT")
 
 header_art
 header_info
@@ -273,7 +295,7 @@ header_info
 command -v "$CC_BIN" >/dev/null || die "compilateur '$CC_BIN' introuvable"
 command -v make >/dev/null || die "make introuvable"
 command -v nm >/dev/null || die "nm introuvable (binutils)"
-[ -f "$DIR/Makefile" ] || die "pas de Makefile dans $DIR"
+[ "$PROJ" = gnl ] || [ -f "$DIR/Makefile" ] || die "pas de Makefile dans $DIR"
 
 BUILD="$FT_DIR/build/$PROJ"
 mkdir -p "$BUILD" || die "impossible de créer $BUILD"
@@ -282,11 +304,16 @@ CHECKS="$BUILD/checks.txt"
 A="$DIR/$ARCHIVE"
 MK=(make --no-print-directory -C "$DIR")
 HAS_BONUS=0
-"${MK[@]}" -n bonus >/dev/null 2>&1 && HAS_BONUS=1
+if [ "$PROJ" = gnl ]; then
+	[ -f "$DIR/get_next_line_bonus.c" ] && [ -f "$DIR/get_next_line_utils_bonus.c" ] && HAS_BONUS=1
+else
+	"${MK[@]}" -n bonus >/dev/null 2>&1 && HAS_BONUS=1
+fi
 
 # Always leave the project without .o files, whatever happens (end of tests,
 # build/link error, Ctrl-C). Uses the project's own `make clean`.
 cleanup() {
+	[ "$PROJ" = gnl ] && return	# gnl is compiled in ftorture's build dir only
 	[ -f "$DIR/Makefile" ] || return
 	"${MK[@]}" clean >/dev/null 2>&1
 	printf '%s   %s▶ make clean : .o supprimés%s\n\n' "$CL" "$PHD" "$X"
@@ -508,8 +535,11 @@ run_checks() {
 
 # ------------------------------------------------------------- prototypes --
 check_protos() {
-	[ "$PROJ" = printf ] && emit S "PROTOTYPE · sujet ft_printf v12.1" \
-		|| emit S "PROTOTYPES · man Linux + sujet v19.3"
+	case "$PROJ" in
+		printf) emit S "PROTOTYPE · sujet ft_printf v12.1" ;;
+		gnl) emit S "PROTOTYPE · sujet get_next_line v14.3" ;;
+		*) emit S "PROTOTYPES · man Linux + sujet v19.3" ;;
+	esac
 	local H="$DIR/$HDR" pre="$BUILD/header_pre.h" prefix=""
 	if [ ! -f "$H" ]; then
 		ck KO "$HDR" "absent"
@@ -604,6 +634,13 @@ link_tester() {
 	fi
 	[ -t 1 ] && printf '%s' "$CL"
 }
+
+# -------------------------------------------------------- get_next_line --
+. "$FT_DIR/gnl.sh"
+if [ "$PROJ" = gnl ]; then
+	run_gnl
+	exit $?
+fi
 
 # ------------------------------------------------------------------- main --
 if [ $DO_CHECKS -eq 1 ]; then
