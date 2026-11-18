@@ -31,7 +31,7 @@ typedef struct s_blk
 	char			*base;
 	size_t			maplen;
 	size_t			size;
-	unsigned char	state;	/* 0 empty, 1 live, 2 freed */
+	unsigned char	state;	/* 0 empty, 1 live, 2 freed, 3 freed+unmapped */
 }	t_blk;
 
 static t_blk	g_tab[TAB];
@@ -148,6 +148,19 @@ void	*__wrap_malloc(size_t n)
 	return (base + len - pg - n);
 }
 
+/* is the page holding p mapped right now? (an unmapped block's address
+   range can be handed out again by the libc, e.g. mmap'ed big mallocs)  */
+static int	is_mapped(uintptr_t p)
+{
+	uintptr_t	pg = p & ~(uintptr_t)(page() - 1);
+	int			saved = errno;
+	int			r;
+
+	r = (msync((void *)pg, page(), MS_ASYNC) == 0 || errno != ENOMEM);
+	errno = saved;
+	return (r);
+}
+
 static int	inside_block(uintptr_t p)
 {
 	unsigned	i;
@@ -157,7 +170,8 @@ static int	inside_block(uintptr_t p)
 		return (0);
 	for (i = 0; i < TAB; i++)
 		if (g_tab[i].state && p > g_tab[i].user
-			&& p < (uintptr_t)g_tab[i].base + g_tab[i].maplen)
+			&& p < (uintptr_t)g_tab[i].base + g_tab[i].maplen
+			&& (g_tab[i].state != 3 || !is_mapped(p)))
 			return (1);
 	return (0);
 }
@@ -174,7 +188,9 @@ void	__wrap_free(void *p)
 		return ;
 	}
 	b = lookup((uintptr_t)p, 0);
-	if (b && b->state == 2)
+	if (b && b->state == 3 && is_mapped((uintptr_t)p))
+		b = NULL;	/* address reused since munmap: not our block anymore */
+	if (b && b->state >= 2)
 	{
 		g_zm_bad_free++;
 		snprintf(g_zm_bad_msg, sizeof(g_zm_bad_msg),
@@ -187,7 +203,10 @@ void	__wrap_free(void *p)
 		if (g_freed_maps++ < 20000)
 			mprotect(b->base, b->maplen, PROT_NONE);
 		else
-			munmap(b->base, b->maplen);	/* entry stays as "freed" */
+		{
+			munmap(b->base, b->maplen);
+			b->state = 3;	/* entry stays, but the range may be reused */
+		}
 		return ;
 	}
 	if (inside_block((uintptr_t)p))
