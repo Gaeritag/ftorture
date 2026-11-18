@@ -3,6 +3,8 @@
 /*  strnstr). Guarded buffers turn every out-of-bounds read into a crash.     */
 /* ************************************************************************** */
 #include "zft.h"
+#include "libft_decl.h"
+#include "refs.h"
 
 /* ================================================== is* (1 / 0 exactly) == */
 #define IS_TESTS(NAME, REAL) \

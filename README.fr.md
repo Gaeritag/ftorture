@@ -1,12 +1,17 @@
-# 🔥 ftorture — testeur de libft (sujet v19.3)
+# 🔥 ftorture — testeur 42 : libft & ft_printf
 
 🇬🇧 [English version](README.md)
 
-> *Ta libft va parler.*
+> *Ton code va parler.*
 
-**ftorture** fait passer ta libft à la question : chaque fonction tourne dans son
-propre processus, face à la **vraie** fonction de la libc. On regarde comment elle
-crashe, ce qu'elle fuit et ce qu'elle lit en dehors de sa mémoire.
+**ftorture** fait passer ton projet à la question : chaque test tourne dans son propre
+processus, face à la **vraie** fonction de la libc. On regarde comment il crashe, ce
+qu'il fuit et ce qu'il lit en dehors de sa mémoire.
+
+| Projet | Sujet | Ce qui est testé |
+|---|---|---|
+| **libft** | v19.3 | les 43 fonctions (parties 1, 2 et 3), ~400 tests + fuzzing |
+| **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, largeur, `# +`, ~22 000 appels comparés à `printf` |
 
 Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft), réécrit en C : rien à
 télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes 42).
@@ -23,53 +28,90 @@ source ~/.zshrc        # ou ~/.bashrc
 
 ## Utilisation
 
+### Menu interactif
+
 ```bash
-torture                       # dans le dossier de ta libft
-torture ~/libft               # ou en donnant le chemin
-torture -f split,itoa -v      # quelques fonctions, avec tous les détails
-torture -p 3                  # seulement la partie 3 (listes)
-torture -s                    # mode strict : les ▲ comptent comme erreurs
+torture
+```
+
+Le logo reste en haut de chaque écran :
+
+1. **projet** : `LIBFT` ou `FT_PRINTF` (`↑ ↓` ou `1` `2`, Entrée). Si le dossier courant
+   contient un `libft.h` ou un `ft_printf.h`, il est présélectionné.
+2. **chemin** du projet (Tab pour compléter).
+3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette,
+   puis `▶ LANCER LA TORTURE`.
+
+### En ligne de commande
+
+```bash
+torture libft ~/libft                # une libft
+torture printf ~/ft_printf           # un ft_printf (obligatoire + bonus)
+torture ~/ft_printf -s               # projet détecté tout seul
+torture libft -f split,itoa -v       # quelques fonctions, avec tous les détails
+torture printf -f %d,"flag -"        # quelques conversions / flags
+torture printf -p 1                  # seulement la partie obligatoire
 ```
 
 | Option | Effet |
 |---|---|
 | `-s`, `--speculative` | les erreurs spéculatives (▲) font échouer |
 | `-v`, `--verbose` | affiche le détail de chaque échec |
-| `-f`, `--func LISTE` | `ft_split,itoa,strlcat` (le préfixe `ft_` est facultatif) |
-| `-p`, `--part N` | partie 1, 2 ou 3 |
+| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` |
+| `-p`, `--part N` | libft : 1, 2 ou 3 · printf : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
 | `--seed N` | graine du fuzzing (42 par défaut) |
 | `--timeout S` | timeout par test (3 s par défaut) |
 | `--no-color` | sans couleurs |
 
-Un rapport complet sans couleurs est écrit dans `ftorture.log`, dans le dossier de
-ftorture. Rien n'est jamais écrit dans ta libft, donc pas de fichier en trop dans ton rendu.
+À la fin, ftorture lance le `make clean` de ton projet, même après une erreur ou un
+Ctrl-C : il ne reste aucun `.o`. Le rapport complet sans couleurs est écrit dans
+`ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
 
-## Ce qui est vérifié
+## Vérifications (les deux projets)
 
 | Bloc | Détail |
 |---|---|
-| **Makefile** | règles `$(NAME) all clean fclean re`, `cc`, `-Wall -Wextra -Werror` sur chaque fichier (lu avec `make -nB`, même avec des `@`), `ar` et pas libtool, pas de `-std=c99`, **relink**, `clean` / `fclean` |
-| **Fichiers** | `libft.h` et `ft_*.c` à la racine, fichiers en trop, `README.md` (1re ligne en italique, sections Description / Instructions / Resources) |
-| **Code** | norminette (si installée), **fonctions externes interdites** (tout sauf `malloc`, `free`, `write`, avec le fichier fautif), **variables globales**, fonctions auxiliaires non `static`, les 43 fonctions présentes |
-| **Prototypes** | chaque prototype de ton `libft.h` comparé par le compilateur au **man Linux** / sujet v19.3, structure `t_list` exacte, `libft.h` qui compile seul |
-| **Tests** | environ 400 tests, plus du fuzzing contre la vraie glibc (ou BSD pour `strlcpy`, `strlcat`, `strnstr`) |
+| **Makefile** | règles `$(NAME) all clean fclean re` (+ `bonus` pour printf), `cc`, `-Wall -Wextra -Werror` sur chaque fichier (lu avec `make -nB`, même avec des `@`), `ar` et pas libtool, pas de `-std=c99`, **relink** (y compris `make bonus`), `clean` / `fclean` |
+| **Fichiers** | fichiers à rendre, fichiers en trop, `README.md` (1re ligne en italique, Description / Instructions / Resources, + explication de l'algorithme pour printf) |
+| **Code** | norminette (si installée), **fonctions externes interdites** (tout sauf `malloc`, `free`, `write`, avec le fichier fautif), **variables globales**, fonctions auxiliaires non `static` (libft), fonctions présentes dans l'archive |
+| **Prototypes** | chaque prototype du header comparé par le compilateur au **man Linux** / sujet, `t_list` exacte (libft), header qui compile seul |
 
-## Les instruments de torture
+## libft
 
-- **Un processus par test** (`fork`) : un crash n'arrête pas les autres tests.
-- **Mémoire gardée** : les chaînes de test sont collées à une page interdite, donc
-  la moindre lecture au-delà de la fin crashe (`strlcat`, `strnstr`, `substr`, `memchr`…).
+- **Mémoire gardée** : les chaînes de test sont collées à une page interdite, donc la
+  moindre lecture au-delà de la fin crashe (`strlcat`, `strnstr`, `substr`, `memchr`…).
 - **malloc instrumenté** (`-Wl,--wrap=malloc,--wrap=free`) :
-  - un octet écrit hors d'un bloc : crash
-  - utilisation après `free` : crash ; **double free** : signalé
-  - **fuites** : tout bloc non libéré à la fin du test
+  - un octet écrit hors d'un bloc : crash ; utilisation après `free` : crash
+  - **double free** : signalé ; **fuites** : tout bloc non libéré à la fin du test
   - taille allouée vérifiée (`strdup`, `itoa`, `split`…)
   - blocs neufs remplis de `0xA5` : un `calloc` qui ne met pas à zéro se voit
-  - **protection des malloc** (`M`) : le test est rejoué en faisant échouer le 1er,
-    le 2e, le 3e… malloc. Ta fonction doit renvoyer `NULL` sans crash ni fuite
-    (indispensable pour `ft_split` et `ft_lstmap`).
+  - **protection des malloc** (`M`) : le test est rejoué en faisant échouer le 1er, le
+    2e, le 3e… malloc ; il faut renvoyer `NULL` sans crash ni fuite (`ft_split`, `ft_lstmap`)
+- **Fuzzing** contre la glibc (ou BSD pour `strlcpy`, `strlcat`, `strnstr`).
+
+## ft_printf
+
+Chaque appel lance **ton `ft_printf`**, puis **le vrai `printf`** avec les mêmes
+arguments, chacun avec sa sortie redirigée vers un fichier. On compare la **sortie
+octet par octet** (y compris les `\0` de `%c`) et la **valeur de retour**.
+
+- **Partie obligatoire** (archive de `make`) : chaque conversion `c s p d i u x X %`
+  (valeurs limites, `NULL` → `(null)` / `(nil)`, les 256 caractères, `INT_MIN`,
+  `UINT_MAX`, pointeurs 64 bits…), mélanges, 24 arguments, sorties de plus de
+  10 000 octets, et du fuzzing.
+- **Bonus** (archive de `make bonus`, testée dans une deuxième passe) : chaque flag
+  (`-`, `0`, `.`, largeur, `#`, espace, `+`), leurs interactions (`'-'` annule `'0'`,
+  `'+'` l'emporte sur `' '`, `.0` avec la valeur 0…) et **5 000 combinaisons aléatoires**
+  valides selon la norme C.
+- **Cas indéfinis** (`%05s`, `%.3c`, `%#d`, `%+u`, `%s` NULL avec précision, flags sur
+  `%%`…) : ▲ seulement, s'ils diffèrent de la glibc.
+- **Mémoire** : fuites détectées, et malloc rendu défaillant (pas de crash ni de fuite).
+- **Format `NULL`** : comparé au crash de la vraie fonction (règle ci-dessous).
+
+Si ton Makefile n'a pas de règle `bonus`, seule la partie obligatoire est testée et le
+résumé le dit.
 
 ## Ta fonction face à la vraie
 
@@ -83,7 +125,7 @@ fonction et **la vraie** dans deux processus séparés, puis compare :
 | pas de crash | crash | ▲ **spéculatif** : tu protèges alors que la libc ne le fait pas |
 | pas de crash | pas de crash | les résultats doivent être identiques |
 
-Les parties 2 et 3 n'ont pas d'originale dans la libc : la référence est alors une
+Pour les parties 2 et 3 de la libft (pas d'originale dans la libc), la référence est une
 implémentation simple, sans protection contre NULL.
 
 Les ▲ sont des avertissements : ils ne font pas échouer ftorture, sauf avec `-s`. À toi
@@ -104,7 +146,14 @@ de savoir les défendre en correction.
 
 ## Ajouter un test
 
-Les tests sont dans `src/t_part1.c`, `src/t_part2.c` et `src/t_part3.c`.
+```
+src/engine.c, memtrack.c, zft.h   moteur commun (fork, mémoire gardée, rapport)
+src/libft/                        tests libft (t_part1-3.c) + références
+src/printf/                       tests ft_printf (t_printf.c, t_printf_bonus.c)
+protos/                           prototypes attendus
+```
+
+**libft :**
 
 ```c
 TEST(ft_strlen, "mon test")
@@ -116,22 +165,27 @@ VS(ft_strlen, "comparé à la libc")
 {
 	OUT("%zu", PICK(ft_strlen, r_strlen)("abc"));
 }
+```
 
-MTEST(ft_strdup, "malloc protégé")
+**ft_printf** (`pf_d`, `pf_s`, `pf_minus`… : la suite où le test apparaît) :
+
+```c
+TEST(pf_d, "mon test")
 {
-	ARM();
-	char *d = ft_strdup("x");
-	DISARM();
-	if (FAILING)
-		CHECK(!d, "doit renvoyer NULL");
-	free(d);
+	PF("%d|%d", 42, -42);       /* même sortie + même retour que printf */
+}
+
+SPEC_TEST(pf_undef, "cas indéfini")
+{
+	PF("%05s", "ab");           /* ▲ seulement si différent de la glibc */
 }
 ```
 
-- **Assertions** : `CHECK`, `EQ_INT`, `EQ_SZ`, `EQ_PTR`, `EQ_STR`, `EQ_MEM`
+- **Assertions** : `CHECK`, `EQ_INT`, `EQ_SZ`, `EQ_PTR`, `EQ_STR`, `EQ_MEM`, `PF`
+- **Variantes** : `SPEC_TEST` (▲), `VS` / `VS_SPEC` (comparé à la vraie fonction),
+  `MTEST` (malloc défaillant, entre `ARM()` et `DISARM()`)
 - **Helpers** : `gstr`, `gmem`, `gbuf` (mémoire gardée), `alloc_size`,
-  `cap_open` / `cap_read` (sorties sur un fd), `INPUT` (décrit l'entrée en cas d'échec)
-- `VS_SPEC` : comme `VS`, mais une différence de résultat n'est que spéculative
+  `cap_open` / `cap_read`, `INPUT` (décrit l'entrée en cas d'échec)
 
 ## Licence
 

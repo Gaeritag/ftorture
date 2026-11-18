@@ -40,7 +40,13 @@ static struct s_opt
 	int			timeout;
 	int			max_details;
 	int			no_banner;
-}	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0};
+	int			no_summary;		/* first of two chained runs            */
+	int			no_legend;
+	const char	*stats_out;		/* save counters for a later run        */
+	const char	*stats_in;		/* load counters from a previous run    */
+	const char	*note;			/* extra line in the summary box        */
+}	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
+	NULL};
 
 static FILE	*g_log;
 
@@ -67,31 +73,13 @@ static FILE	*g_log;
 #define C_BGY  (o.color ? "\033[48;5;221m\033[38;5;16m\033[1m" : "")
 
 /* ========================================================== registry ==== */
-typedef struct s_func
-{
-	const char	*name;
-	int			part;
-	void		*addr;
-}	t_func;
+/* the project (libft / ft_printf) is described in src/<project>/proj.c */
+#include "project.h"
+#define g_funcs (g_proj.funcs)
+#define NFUNCS (g_proj.nfuncs)
+#define g_part_names (g_proj.part_names)
 
-#define F(n, p) { #n, p, (void *)(n) }
-static t_func	g_funcs[] = {
-	F(ft_isalpha, 1), F(ft_isdigit, 1), F(ft_isalnum, 1), F(ft_isascii, 1),
-	F(ft_isprint, 1), F(ft_strlen, 1), F(ft_memset, 1), F(ft_bzero, 1),
-	F(ft_memcpy, 1), F(ft_memmove, 1), F(ft_strlcpy, 1), F(ft_strlcat, 1),
-	F(ft_toupper, 1), F(ft_tolower, 1), F(ft_strchr, 1), F(ft_strrchr, 1),
-	F(ft_strncmp, 1), F(ft_memchr, 1), F(ft_memcmp, 1), F(ft_strnstr, 1),
-	F(ft_atoi, 1), F(ft_calloc, 1), F(ft_strdup, 1),
-	F(ft_substr, 2), F(ft_strjoin, 2), F(ft_strtrim, 2), F(ft_split, 2),
-	F(ft_itoa, 2), F(ft_strmapi, 2), F(ft_striteri, 2), F(ft_putchar_fd, 2),
-	F(ft_putstr_fd, 2), F(ft_putendl_fd, 2), F(ft_putnbr_fd, 2),
-	F(ft_lstnew, 3), F(ft_lstadd_front, 3), F(ft_lstsize, 3),
-	F(ft_lstlast, 3), F(ft_lstadd_back, 3), F(ft_lstdelone, 3),
-	F(ft_lstclear, 3), F(ft_lstiter, 3), F(ft_lstmap, 3),
-};
-#define NFUNCS ((int)(sizeof(g_funcs) / sizeof(g_funcs[0])))
-static const char	*g_part_names[] = {"", "Fonctions de la libc",
-	"Fonctions supplémentaires", "Listes chaînées"};
+static void	padv(char *out, size_t osz, const char *s, int w);
 
 static t_test	*g_tests;
 static int		g_ntests;
@@ -741,10 +729,10 @@ static void	banner(void)
 		pixel_row(row, sizeof(row), "FTORTURE", i, scan[i], 22);
 		printf("   %s\n", row);
 	}
-	printf("   %s▚▚ LIBFT TESTER · SUJET v19.3 · LINUX ▞▞%s\n", C_PHM, C_RST);
-	printf("   %s> ta libft va parler%s%s_%s\n\n", C_PH, C_RST,
+	printf("   %s▚▚ %s ▞▞%s\n", C_PHM, g_proj.subtitle, C_RST);
+	printf("   %s%s%s%s_%s\n\n", C_PH, g_proj.tagline, C_RST,
 		o.color ? "\033[5m\033[38;5;46m" : "", C_RST);
-	printf("   %slibft %s %s\n", C_PHD, C_RST, o.path);
+	printf("   %sprojet%s %s · %s\n", C_PHD, C_RST, g_proj.name, o.path);
 	printf("   %smode  %s %s\n", C_PHD, C_RST, o.spec
 		? "strict (-s) : les ▲ comptent comme erreurs"
 		: "normal : ▲ = avertissements (-s pour les compter)");
@@ -891,7 +879,7 @@ static void	print_checks(void)
 			sb_add(&protos, "       %sattendu%s %s%s%s\n", C_GRY, C_RST,
 				C_GRN, exp, C_RST);
 			sb_add(&protos, "       %strouvé %s %s%s%s\n", C_GRY, C_RST,
-				col, *found ? found : "(non déclaré dans libft.h)", C_RST);
+				col, *found ? found : "(non déclaré dans le header)", C_RST);
 			if (g_log)
 				fprintf(g_log, "[PROTO %s] %s\n   attendu: %s\n   trouvé : %s\n",
 					st, name, exp, found);
@@ -934,33 +922,32 @@ typedef struct s_fstat
 
 static t_fstat	g_fs[64];
 
-static int	selected(const t_func *f)
+static int	in_list(const char *list, const char *w)
 {
-	const char	*p;
-	size_t		l;
+	const char	*p = list;
+	size_t		l = strlen(w);
 
-	if (o.part && f->part != o.part)
+	if (!l)
 		return (0);
-	if (!o.only)
-		return (1);
-	l = strlen(f->name);
-	p = o.only;
-	while ((p = strstr(p, f->name)))
+	while ((p = strstr(p, w)))
 	{
-		if ((p == o.only || p[-1] == ',') && (p[l] == ',' || p[l] == 0))
-			return (1);
-		p += l;
-	}
-	/* accept names without the ft_ prefix */
-	p = o.only;
-	l -= 3;
-	while ((p = strstr(p, f->name + 3)))
-	{
-		if ((p == o.only || p[-1] == ',') && (p[l] == ',' || p[l] == 0))
+		if ((p == list || p[-1] == ',') && (p[l] == ',' || p[l] == 0))
 			return (1);
 		p += l;
 	}
 	return (0);
+}
+
+/* -f accepts "ft_split", "split", "pf_d" or the label ("%d", "flag -") */
+static int	selected(const t_func *f)
+{
+	if (o.part && f->part != o.part)
+		return (0);
+	if (!o.only)
+		return (1);
+	return (in_list(o.only, f->name)
+		|| (strlen(f->name) > 3 && in_list(o.only, f->name + 3))
+		|| (f->label && in_list(o.only, f->label)));
 }
 
 static void	run_function(int fi, int *ti)
@@ -983,14 +970,19 @@ static void	run_function(int fi, int *ti)
 		return ;
 	fs->ran = 1;
 	fs->total = end - start;
-	printf("   %s%-16s%s ", C_B, f->name, C_RST);
+	{
+		char	lbl[64];
+
+		padv(lbl, sizeof(lbl), f->label ? f->label : f->name, 16);
+		printf("   %s%s%s ", C_B, lbl, C_RST);
+	}
 	if (!f->addr)
 	{
 		fs->missing = 1;
-		printf("%s✘ ABSENTE de libft.a%s %s(%d tests ignorés)%s\n", C_BGR,
-			C_RST, C_GRY, fs->total, C_RST);
+		printf("%s✘ ABSENTE de %s%s %s(%d tests ignorés)%s\n", C_BGR,
+			g_proj.archive, C_RST, C_GRY, fs->total, C_RST);
 		if (g_log)
-			fprintf(g_log, "\n%s : ABSENTE\n", f->name);
+			fprintf(g_log, "\n%s : ABSENTE\n", f->label ? f->label : f->name);
 		return ;
 	}
 	fflush(stdout);
@@ -1039,7 +1031,8 @@ static void	run_function(int fi, int *ti)
 		printf("\n");
 	}
 	if (g_log)
-		fprintf(g_log, "\n%s : %d/%d (%d spéculatif)\n", f->name, fs->pass,
+		fprintf(g_log, "\n%s : %d/%d (%d spéculatif)\n",
+			f->label ? f->label : f->name, fs->pass,
 			fs->total, fs->spec);
 	for (i = 0; i < end - start; i++)
 	{
@@ -1140,8 +1133,6 @@ static void	box_center(const char *fmt, ...)
 
 static int	summary(void)
 {
-	static const char	*short_names[] = {"", "libc", "supplémentaires",
-		"listes chaînées"};
 	int					p;
 	int					i;
 	int					tp = 0, tf = 0, ts = 0, tce = 0, tt = 0;
@@ -1157,7 +1148,7 @@ static int	summary(void)
 	rep("▀", g_inner - 13);
 	printf("█%s\n", C_RST);
 	box_line("%s", "");
-	for (p = 1; p <= 3; p++)
+	for (p = 1; p <= g_proj.nparts; p++)
 	{
 		int		ok = 0, all = 0;
 
@@ -1194,12 +1185,14 @@ static int	summary(void)
 				bw = 6;
 			bar(mb, sizeof(mb), ok, all, bw, ok == all ? C_PH
 				: ok * 2 >= all ? C_YEL : C_RED);
-			padv(lbl, sizeof(lbl), short_names[p], 16);
+			padv(lbl, sizeof(lbl), g_proj.short_names[p], 16);
 			box_line("%sP%d%s %s %s▕%s%s▏%s %s%2d/%-2d%s  %3d%%", C_PH, p,
 				C_RST, lbl, C_PHD, mb, C_PHD, C_RST, ok == all ? C_PH : C_RED,
 				ok, all, C_RST, ok * 100 / all);
 		}
 	}
+	if (o.note)
+		box_line("%s%s%s", C_YEL, o.note, C_RST);
 	box_line("%s", "");
 	box_line("%sTESTS %s %s%d ✔%s  %s%d ✘%s  %s%d ▲%s  %s/ %d%s", C_PHD, C_RST,
 		C_GRN, tp, C_RST, tf ? C_RED : C_PHD, tf, C_RST, ts ? C_YEL : C_PHD, ts,
@@ -1210,7 +1203,7 @@ static int	summary(void)
 	if (miss)
 		box_line("%sABSENT%s %s%d fonction(s)%s", C_PHD, C_RST, C_RED, miss,
 			C_RST);
-	if (o.checks)
+	if (o.checks || g_ck.ok || g_ck.ko || g_ck.proto_tot)
 		box_line("%sCHECKS%s %s%d ✔%s  %s%d ✘%s  %s%d ▲%s  %sprotos %d/%d%s",
 			C_PHD, C_RST, C_GRN, g_ck.ok, C_RST, g_ck.ko ? C_RED : C_PHD,
 			g_ck.ko, C_RST, g_ck.warn ? C_YEL : C_PHD, g_ck.warn, C_RST,
@@ -1248,6 +1241,44 @@ static int	summary(void)
 	return (bad ? 1 : 0);
 }
 
+/* ------------------------------------------ chained runs (mandatory, bonus) */
+static void	stats_save(const char *path)
+{
+	FILE	*f = fopen(path, "wb");
+
+	if (!f)
+		return ;
+	fwrite(g_fs, sizeof(g_fs), 1, f);
+	fwrite(&g_ck, sizeof(g_ck), 1, f);
+	fclose(f);
+}
+
+static void	stats_load(const char *path)
+{
+	FILE	*f = fopen(path, "rb");
+
+	if (!f)
+		return ;
+	if (fread(g_fs, sizeof(g_fs), 1, f) != 1
+		|| fread(&g_ck, sizeof(g_ck), 1, f) != 1)
+	{
+		memset(g_fs, 0, sizeof(g_fs));
+		memset(&g_ck, 0, sizeof(g_ck));
+	}
+	fclose(f);
+}
+
+static int	run_status(void)
+{
+	int	i;
+
+	for (i = 0; i < NFUNCS; i++)
+		if (g_fs[i].ran && (g_fs[i].missing || g_fs[i].fail
+				|| (o.spec && g_fs[i].spec)))
+			return (1);
+	return (g_ck.ko ? 1 : 0);
+}
+
 static void	usage(void)
 {
 	printf("usage: ftorture_tester [options]\n"
@@ -1257,7 +1288,9 @@ static void	usage(void)
 		"  -p, --part N       ne teste que la partie N (1, 2 ou 3)\n"
 		"      --checks FILE  résultats des vérifications (généré par torture)\n"
 		"      --log FILE     écrit un rapport sans couleurs\n"
-		"      --path PATH    chemin affiché de la libft\n"
+		"      --path PATH    chemin affiché du projet\n"
+		"      --no-summary, --no-legend, --note TEXT\n"
+		"      --stats-out FILE, --stats-in FILE (passes chaînées)\n"
 		"      --seed N       graine des tests aléatoires\n"
 		"      --timeout S    timeout par test (défaut 3s)\n"
 		"      --no-color\n");
@@ -1295,6 +1328,16 @@ int	main(int ac, char **av)
 			o.color = 0;
 		else if (!strcmp(a, "--no-banner"))
 			o.no_banner = 1;
+		else if (!strcmp(a, "--no-summary"))
+			o.no_summary = 1;
+		else if (!strcmp(a, "--no-legend"))
+			o.no_legend = 1;
+		else if (!strcmp(a, "--stats-out") && i + 1 < ac)
+			o.stats_out = av[++i];
+		else if (!strcmp(a, "--stats-in") && i + 1 < ac)
+			o.stats_in = av[++i];
+		else if (!strcmp(a, "--note") && i + 1 < ac)
+			o.note = av[++i];
 		else
 		{
 			usage();
@@ -1310,12 +1353,15 @@ int	main(int ac, char **av)
 	if (g_shm == MAP_FAILED)
 		return (perror("mmap"), 2);
 	if (o.log)
-		g_log = fopen(o.log, "w");
+		g_log = fopen(o.log, o.stats_in ? "a" : "w");
+	if (o.stats_in)
+		stats_load(o.stats_in);
 	qsort(g_tests, (size_t)g_ntests, sizeof(t_test), cmp_tests);
 	if (!o.no_banner)
 		banner();
 	print_checks();
-	legend();
+	if (!o.no_legend)
+		legend();
 	ti = 0;
 	part = 0;
 	for (i = 0; i < NFUNCS; i++)
@@ -1342,7 +1388,9 @@ int	main(int ac, char **av)
 			ti++;
 		run_function(i, &ti);
 	}
-	i = summary();
+	if (o.stats_out)
+		stats_save(o.stats_out);
+	i = o.no_summary ? run_status() : summary();
 	if (g_log)
 		fclose(g_log);
 	return (i);

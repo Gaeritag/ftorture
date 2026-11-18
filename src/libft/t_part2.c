@@ -5,6 +5,8 @@
 /*  yours does not, it is only a speculative remark.                          */
 /* ************************************************************************** */
 #include "zft.h"
+#include "libft_decl.h"
+#include "refs.h"
 
 static void	free_split(char **r)
 {

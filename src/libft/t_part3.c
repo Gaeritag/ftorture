@@ -4,6 +4,8 @@
 /*  double free are caught, forgotten frees are reported as leaks.            */
 /* ************************************************************************** */
 #include "zft.h"
+#include "libft_decl.h"
+#include "refs.h"
 
 static int	g_del;
 static int	g_iter;

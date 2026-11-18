@@ -1,8 +1,9 @@
 # **************************************************************************** #
-#  ftorture header, sourced by torture.sh and printed BEFORE the checks.       #
+#  ftorture header, sourced by torture.sh.                                     #
 #  Pixel "FTORTURE": 3x5 font, 2 chars per pixel, 1-pixel drop shadow,         #
 #  phosphor green with scanlines. Same art as banner() in src/engine.c.        #
-#  Needs: COLOR (1 or empty), PH PHM PHD X, LIBFT, SPEC, SEED                   #
+#  Uses: COLOR (1 or empty), PH PHM PHD X, SUBTITLE, TAG,                      #
+#        PROJ_LABEL, DIR, SPEC, SEED                                           #
 # **************************************************************************** #
 
 declare -A FONT=(
@@ -14,7 +15,8 @@ declare -A FONT=(
 	[E]="###:#..:##.:#..:###"
 )
 
-header() {
+# logo + subtitle + tagline (drawn at the top of every screen)
+header_art() {
 	local word="FTORTURE" W=32 r c i line on sh rows
 	local grid=()
 	local scan=(46 40 46 40 46 22)
@@ -53,9 +55,14 @@ header() {
 
 	local blink=""
 	[ -n "$COLOR" ] && blink="${esc}[5m"
-	printf '   %s▚▚ LIBFT TESTER · SUJET v19.3 · LINUX ▞▞%s\n' "$PHM" "$X"
-	printf '   %s> ta libft va parler%s%s%s_%s\n\n' "$PH" "$X" "$blink" "$PH" "$X"
-	printf '   %slibft %s %s\n' "$PHD" "$X" "$LIBFT"
+	printf '   %s▚▚ %s ▞▞%s\n' "$PHM" "${SUBTITLE:-42 TESTER · LIBFT v19.3 · FT_PRINTF v12.1 · LINUX}" "$X"
+	printf '   %s%s%s%s%s_%s\n\n' "$PH" "${TAG:-> ton code va parler}" "$X" "$blink" "$PH" "$X"
+}
+
+# project / path / mode / seed, under the logo once a project is chosen
+header_info() {
+	printf '   %sprojet%s %s\n' "$PHD" "$X" "$PROJ_LABEL"
+	printf '   %schemin%s %s\n' "$PHD" "$X" "$DIR"
 	if [ "$SPEC" = 1 ]; then
 		printf '   %smode  %s strict (-s) : les ▲ comptent comme erreurs\n' "$PHD" "$X"
 	else

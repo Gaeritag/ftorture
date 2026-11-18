@@ -17,8 +17,8 @@
 # include <limits.h>
 # include <unistd.h>
 # include <ctype.h>
-# include "libft_decl.h"
-# include "refs.h"
+
+
 
 /* ---------------------------------------------------------------- kinds -- */
 typedef enum e_kind
