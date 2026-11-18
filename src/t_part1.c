@@ -450,12 +450,18 @@ TEST(ft_toupper, "EOF..255 identique à la libc")
 		EQ_INT(ft_toupper(c), toupper(c));
 	}
 }
-VS_SPEC(ft_toupper, "hors unsigned char (-300..600, INT_MIN/MAX)")
+/* not compared to glibc here: its toupper(-128..-2) returns 128..254 (table
+   quirk), so every normal implementation would get a ▲ for nothing.      */
+SPEC_TEST(ft_toupper, "hors unsigned char : renvoie c inchangé")
 {
-	for (int c = -300; c < 600; c++)
-		OUT("%d", PICK(ft_toupper, r_toupper)(c));
-	OUT("%d", PICK(ft_toupper, r_toupper)(INT_MIN));
-	OUT("%d", PICK(ft_toupper, r_toupper)(INT_MAX));
+	int	v[] = {INT_MIN, -1000, -129, -128, -2, 256, 256 + 'a', 256 + 'A',
+		1000, INT_MAX};
+
+	for (int i = 0; i < 10; i++)
+	{
+		INPUT("ft_toupper(%d)", v[i]);
+		EQ_INT(ft_toupper(v[i]), v[i]);
+	}
 }
 TEST(ft_tolower, "EOF..255 identique à la libc")
 {
@@ -465,12 +471,18 @@ TEST(ft_tolower, "EOF..255 identique à la libc")
 		EQ_INT(ft_tolower(c), tolower(c));
 	}
 }
-VS_SPEC(ft_tolower, "hors unsigned char (-300..600, INT_MIN/MAX)")
+/* not compared to glibc here: its tolower(-128..-2) returns 128..254 (table
+   quirk), so every normal implementation would get a ▲ for nothing.      */
+SPEC_TEST(ft_tolower, "hors unsigned char : renvoie c inchangé")
 {
-	for (int c = -300; c < 600; c++)
-		OUT("%d", PICK(ft_tolower, r_tolower)(c));
-	OUT("%d", PICK(ft_tolower, r_tolower)(INT_MIN));
-	OUT("%d", PICK(ft_tolower, r_tolower)(INT_MAX));
+	int	v[] = {INT_MIN, -1000, -129, -128, -2, 256, 256 + 'a', 256 + 'A',
+		1000, INT_MAX};
+
+	for (int i = 0; i < 10; i++)
+	{
+		INPUT("ft_tolower(%d)", v[i]);
+		EQ_INT(ft_tolower(v[i]), v[i]);
+	}
 }
 
 /* ================================================= strchr / strrchr ===== */
@@ -801,7 +813,9 @@ TEST(ft_calloc, "mémoire mise à zéro, taille nmemb*size")
 	unsigned char	*p = ft_calloc(10, 4);
 
 	CHECK(p != NULL, "ft_calloc(10, 4) a renvoyé NULL");
-	EQ_SZ(alloc_size(p), 40);
+	CHECK(alloc_size(p) != (size_t)-1 && alloc_size(p) >= 40,
+		"bloc trop petit ou pas alloué par malloc (%zu octets pour 40)",
+		alloc_size(p));
 	for (int i = 0; i < 40; i++)
 		EQ_INT(p[i], 0);
 	free(p);
@@ -885,7 +899,9 @@ TEST(ft_strdup, "copie exacte, nouvelle zone")
 	CHECK(d != NULL, "ft_strdup a renvoyé NULL");
 	CHECK(d != s, "ft_strdup doit renvoyer une nouvelle zone mémoire");
 	EQ_STR(d, "coucou 42");
-	EQ_SZ(alloc_size(d), 10);
+	CHECK(alloc_size(d) != (size_t)-1 && alloc_size(d) >= 10,
+		"bloc trop petit ou pas alloué par malloc (%zu octets pour 10)",
+		alloc_size(d));
 	free(d);
 }
 TEST(ft_strdup, "chaîne vide")
