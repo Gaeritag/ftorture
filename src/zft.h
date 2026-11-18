@@ -103,28 +103,28 @@ const char	*zft_mem(const void *p, size_t n);	/* hex dump (ring buffer)  */
 # define CHECK(cond, ...) do { if (!(cond)) \
 	zft_failf(__FILE__, __LINE__, __VA_ARGS__); } while (0)
 
-# define EQ_INT(got, exp) do { long long _g = (long long)(got); \
-	long long _e = (long long)(exp); if (_g != _e) { char _a[64], _b[64]; \
-	snprintf(_a, 64, "%lld", _e); snprintf(_b, 64, "%lld", _g); \
-	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+# define EQ_INT(got, exp) do { long long zq_g = (long long)(got); \
+	long long zq_e = (long long)(exp); if (zq_g != zq_e) { char zq_a[64], zq_b[64]; \
+	snprintf(zq_a, 64, "%lld", zq_e); snprintf(zq_b, 64, "%lld", zq_g); \
+	zft_fail(__FILE__, __LINE__, #got, zq_a, zq_b); } } while (0)
 
-# define EQ_SZ(got, exp) do { size_t _g = (size_t)(got); \
-	size_t _e = (size_t)(exp); if (_g != _e) { char _a[64], _b[64]; \
-	snprintf(_a, 64, "%zu", _e); snprintf(_b, 64, "%zu", _g); \
-	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+# define EQ_SZ(got, exp) do { size_t zq_g = (size_t)(got); \
+	size_t zq_e = (size_t)(exp); if (zq_g != zq_e) { char zq_a[64], zq_b[64]; \
+	snprintf(zq_a, 64, "%zu", zq_e); snprintf(zq_b, 64, "%zu", zq_g); \
+	zft_fail(__FILE__, __LINE__, #got, zq_a, zq_b); } } while (0)
 
-# define EQ_PTR(got, exp) do { const void *_g = (const void *)(got); \
-	const void *_e = (const void *)(exp); if (_g != _e) { char _a[64], _b[64]; \
-	snprintf(_a, 64, "%p", _e); snprintf(_b, 64, "%p", _g); \
-	zft_fail(__FILE__, __LINE__, #got, _a, _b); } } while (0)
+# define EQ_PTR(got, exp) do { const void *zq_g = (const void *)(got); \
+	const void *zq_e = (const void *)(exp); if (zq_g != zq_e) { char zq_a[64], zq_b[64]; \
+	snprintf(zq_a, 64, "%p", zq_e); snprintf(zq_b, 64, "%p", zq_g); \
+	zft_fail(__FILE__, __LINE__, #got, zq_a, zq_b); } } while (0)
 
-# define EQ_STR(got, exp) do { const char *_g = (got); const char *_e = (exp); \
-	if ((_g == NULL) != (_e == NULL) || (_g && strcmp(_g, _e) != 0)) \
-	zft_fail(__FILE__, __LINE__, #got, zft_str(_e), zft_str(_g)); } while (0)
+# define EQ_STR(got, exp) do { const char *zq_g = (got); const char *zq_e = (exp); \
+	if ((zq_g == NULL) != (zq_e == NULL) || (zq_g && strcmp(zq_g, zq_e) != 0)) \
+	zft_fail(__FILE__, __LINE__, #got, zft_str(zq_e), zft_str(zq_g)); } while (0)
 
-# define EQ_MEM(got, exp, n) do { const void *_g = (got); const void *_e = (exp);\
-	size_t _n = (n); if (memcmp(_g, _e, _n) != 0) \
-	zft_fail(__FILE__, __LINE__, #got, zft_mem(_e, _n), zft_mem(_g, _n)); \
+# define EQ_MEM(got, exp, n) do { const void *zq_g = (got); const void *zq_e = (exp);\
+	size_t zq_n = (n); if (memcmp(zq_g, zq_e, zq_n) != 0) \
+	zft_fail(__FILE__, __LINE__, #got, zft_mem(zq_e, zq_n), zft_mem(zq_g, zq_n)); \
 	} while (0)
 
 # define SIGN(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))

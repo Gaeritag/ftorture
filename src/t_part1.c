@@ -174,7 +174,7 @@ VS(ft_bzero, "NULL avec n = 3")
 TEST(ft_memcpy, "copie et renvoie dest")
 {
 	char	d[16];
-	char	*s = gstr("Hello\0World");
+	char	*s = gmem("Hello\0World", 12);
 
 	memset(d, 'z', 16);
 	EQ_PTR(ft_memcpy(d, s, 12), d);

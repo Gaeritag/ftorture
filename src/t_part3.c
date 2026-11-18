@@ -528,7 +528,7 @@ VS(ft_lstmap, "f NULL")
 	free_list(m, 0);
 	free_list(l, 1);
 }
-VS(ft_lstmap, "del NULL (succès)")
+VS_SPEC(ft_lstmap, "del NULL (succès)")
 {
 	t_list	*l = mklist(3);
 	t_list	*m = PICK(ft_lstmap, r_lstmap)(l, f_dup10, NULL);
