@@ -82,6 +82,16 @@ CHECKS="$BUILD/checks.txt"
 A="$LIBFT/libft.a"
 MK=(make --no-print-directory -C "$LIBFT")
 
+# Always leave the libft without .o files, whatever happens (end of tests,
+# build/link error, Ctrl-C). Uses the libft's own `make clean`.
+cleanup() {
+	[ -f "$LIBFT/Makefile" ] || return
+	"${MK[@]}" clean >/dev/null 2>&1
+	printf '   %s▶ make clean : .o supprimés%s\n\n' "$PHD" "$X"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
 emit()   { local IFS='|'; printf '%s\n' "$*" >> "$CHECKS"; }
 ck()     { emit C "$@"; }
 detail() { emit D "$*"; }
@@ -378,4 +388,5 @@ fi
 CHK_ARGS=()
 [ $DO_CHECKS -eq 1 ] && CHK_ARGS=(--checks "$CHECKS")
 cd "$BUILD" || exit 2
-exec "$BUILD/ftorture_tester" --no-banner "${CHK_ARGS[@]}" --path "$LIBFT" --log "$FT_DIR/ftorture.log" "${PASS[@]}"
+"$BUILD/ftorture_tester" --no-banner "${CHK_ARGS[@]}" --path "$LIBFT" --log "$FT_DIR/ftorture.log" "${PASS[@]}"
+exit $?
