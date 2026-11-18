@@ -39,7 +39,8 @@ static struct s_opt
 	unsigned	seed;
 	int			timeout;
 	int			max_details;
-}	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3};
+	int			no_banner;
+}	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0};
 
 static FILE	*g_log;
 
@@ -49,7 +50,13 @@ static FILE	*g_log;
 #define C_DIM  (o.color ? "\033[2m" : "")
 #define C_IT   (o.color ? "\033[3m" : "")
 #define C_RED  (o.color ? "\033[38;5;203m" : "")
-#define C_GRN  (o.color ? "\033[38;5;114m" : "")
+#define C_GRN  (o.color ? "\033[38;5;82m" : "")
+/* retro phosphor palette */
+#define C_PH   (o.color ? "\033[38;5;46m" : "")
+#define C_PHM  (o.color ? "\033[38;5;34m" : "")
+#define C_PHD  (o.color ? "\033[38;5;22m" : "")
+#define C_INV  (o.color ? "\033[48;5;46m\033[38;5;16m\033[1m" : "")
+#define C_INVR (o.color ? "\033[48;5;203m\033[38;5;16m\033[1m" : "")
 #define C_YEL  (o.color ? "\033[38;5;221m" : "")
 #define C_BLU  (o.color ? "\033[38;5;75m" : "")
 #define C_CYN  (o.color ? "\033[38;5;80m" : "")
@@ -635,15 +642,70 @@ static void	rep(const char *s, int n)
 		fputs(s, stdout);
 }
 
+/* retro section header:  ▌ TITLE ▐ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀ */
 static void	section(const char *title, const char *col)
 {
 	int	w = term_width();
 	int	l = vis_len(title);
 
-	printf("\n %s%s━━ %s%s%s%s ", C_B, col, C_RST, C_B, title, C_RST);
-	printf("%s", col);
-	rep("━", w - l - 6);
+	(void)col;
+	printf("\n   %s ▶ %s %s ", C_INV, title, C_RST);
+	printf("%s", C_PHD);
+	rep("▀", w - l - 10);
 	printf("%s\n\n", C_RST);
+}
+
+/* ------------------------------------------------ 3x5 pixel font ------- */
+static const char	*font(char c)
+{
+	switch (c)
+	{
+		case 'F': return ("###" "#.." "##." "#.." "#..");
+		case 'T': return ("###" ".#." ".#." ".#." ".#.");
+		case 'O': return ("###" "#.#" "#.#" "#.#" "###");
+		case 'R': return ("##." "#.#" "##." "#.#" "#.#");
+		case 'U': return ("#.#" "#.#" "#.#" "#.#" "###");
+		case 'E': return ("###" "#.." "##." "#.." "###");
+		case 'K': return ("#.#" "#.#" "##." "#.#" "#.#");
+	}
+	return ("...............");
+}
+
+static int	px(const char *w, int r, int c)
+{
+	int	n = (int)strlen(w);
+	int	li = c / 4;
+	int	lc = c % 4;
+
+	if (r < 0 || r > 4 || c < 0 || li >= n || lc == 3)
+		return (0);
+	return (font(w[li])[r * 3 + lc] == '#');
+}
+
+/* one row (0..5, row 5 = shadow) of a word in pixel font, 2 chars/pixel,
+   with a 1-pixel drop shadow down-right. Visible width = strlen(w) * 8.  */
+static void	pixel_row(char *out, size_t osz, const char *w, int r, int col,
+				int shadow)
+{
+	int		W = (int)strlen(w) * 4;
+	int		c;
+	size_t	j = 0;
+	int		cur = -1;
+
+	out[0] = 0;
+	for (c = 0; c < W && j + 32 < osz; c++)
+	{
+		int	on = px(w, r, c);
+		int	sh = !on && px(w, r - 1, c - 1);
+		int	want = on ? col : sh ? shadow : -1;
+
+		if (o.color && want != cur && want >= 0)
+			j += (size_t)snprintf(out + j, osz - j, "\033[38;5;%dm", want);
+		cur = want >= 0 ? want : cur;
+		j += (size_t)snprintf(out + j, osz - j, "%s",
+				on ? "██" : sh ? "▒▒" : "  ");
+	}
+	snprintf(out + j, osz - j, "%s", C_RST);
 }
 
 /* strip ANSI for the log file */
@@ -667,33 +729,30 @@ static void	log_plain(const char *s)
 
 static void	banner(void)
 {
-	/* F T O R T U R E (ANSI Shadow), 68 columns wide */
-	static const char	*l[] = {
-		"███████╗████████╗ ██████╗ ██████╗ ████████╗██╗   ██╗██████╗ ███████╗",
-		"██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚══██╔══╝██║   ██║██╔══██╗██╔════╝",
-		"█████╗     ██║   ██║   ██║██████╔╝   ██║   ██║   ██║██████╔╝█████╗  ",
-		"██╔══╝     ██║   ██║   ██║██╔══██╗   ██║   ██║   ██║██╔══██╗██╔══╝  ",
-		"██║        ██║   ╚██████╔╝██║  ██║   ██║   ╚██████╔╝██║  ██║███████╗",
-		"╚═╝        ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝",
-	};
-	static const int	grad[] = {226, 220, 214, 208, 202, 196};
+	/* pixel "FTORTURE", phosphor green with scanlines. Same art as in
+	   torture.sh (which prints it before the checks).                      */
+	static const int	scan[] = {46, 40, 46, 40, 46, 22};
+	char				row[1024];
 	int					i;
 
 	printf("\n");
 	for (i = 0; i < 6; i++)
 	{
-		if (o.color)
-			printf("   \033[1m\033[38;5;%dm%s\033[0m\n", grad[i], l[i]);
-		else
-			printf("   %s\n", l[i]);
+		pixel_row(row, sizeof(row), "FTORTURE", i, scan[i], 22);
+		printf("   %s\n", row);
 	}
-	printf("   %s%s« ta libft va parler »%s   %slibft tester · sujet v19.3 · "
-		"Linux%s\n\n", C_B, C_RED, C_RST, C_GRY, C_RST);
-	printf("   %slibft  %s%s\n", C_GRY, C_RST, o.path);
-	printf("   %smode   %s%s\n", C_GRY, C_RST, o.spec
-		? "spéculatif strict (-s) : les ▲ comptent comme erreurs"
+	printf("   %s▚▚ LIBFT TESTER · SUJET v19.3 · LINUX ▞▞%s\n", C_PHM, C_RST);
+	printf("   %s> ta libft va parler%s%s_%s\n\n", C_PH, C_RST,
+		o.color ? "\033[5m\033[38;5;46m" : "", C_RST);
+	printf("   %slibft %s %s\n", C_PHD, C_RST, o.path);
+	printf("   %smode  %s %s\n", C_PHD, C_RST, o.spec
+		? "strict (-s) : les ▲ comptent comme erreurs"
 		: "normal : ▲ = avertissements (-s pour les compter)");
-	printf("   %sseed   %s%u\n", C_GRY, C_RST, o.seed);
+	printf("   %sseed  %s %u\n", C_PHD, C_RST, o.seed);
+}
+
+static void	legend(void)
+{
 	printf("\n   %sLégende%s  %s✔%s ok   %s✔%s crash identique à la libc   "
 		"%s✘%s erreur   %sS%s crash\n            %sT%s timeout   %sL%s fuite   "
 		"%sM%s malloc protégé   %s▲%s spéculatif\n",
@@ -1026,19 +1085,33 @@ static void	bar(char *out, size_t osz, int done, int tot, int width,
 	size_t	j;
 	int		i;
 
+	/* pixel segments: ▰ filled, ▱ empty */
 	j = (size_t)snprintf(out, osz, "%s", col);
 	for (i = 0; i < width && j + 16 < osz; i++)
 	{
 		if (i == f)
-			j += (size_t)snprintf(out + j, osz - j, "%s%s", C_RST, C_GRY);
+			j += (size_t)snprintf(out + j, osz - j, "%s%s", C_RST, C_PHD);
 		j += (size_t)snprintf(out + j, osz - j, "%s", i < f ? "█" : "░");
 	}
 	snprintf(out + j, osz - j, "%s", C_RST);
 }
 
-static void	box_line(int inner, const char *fmt, ...)
+/* copy s into out, padded with spaces to a VISIBLE width of w (UTF-8 safe) */
+static void	padv(char *out, size_t osz, const char *s, int w)
 {
-	char	buf[1024];
+	int	l = vis_len(s);
+
+	snprintf(out, osz, "%s%*s", s, w > l ? w - l : 0, "");
+}
+
+/* pixel dialog box:  █▀▀ TITLE ▀▀▀█ / █ content █ / █▄▄▄▄▄▄▄▄▄▄█
+   `inner` = visible width between the two side borders                   */
+static int	g_inner;
+
+__attribute__((format(printf, 1, 2)))
+static void	box_line(const char *fmt, ...)
+{
+	char	buf[2048];
 	va_list	ap;
 	int		l;
 
@@ -1046,31 +1119,47 @@ static void	box_line(int inner, const char *fmt, ...)
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 	l = vis_len(buf);
-	printf("   %s│%s %s", C_GRY, C_RST, buf);
-	rep(" ", inner - l - 1);
-	printf("%s│%s\n", C_GRY, C_RST);
+	printf("   %s█%s %s", C_PHM, C_RST, buf);
+	rep(" ", g_inner - 2 - l);
+	printf(" %s█%s\n", C_PHM, C_RST);
+}
+
+__attribute__((format(printf, 1, 2)))
+static void	box_center(const char *fmt, ...)
+{
+	char	buf[2048];
+	va_list	ap;
+	int		pad;
+
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	pad = (g_inner - 2 - vis_len(buf)) / 2;
+	box_line("%*s%s", pad > 0 ? pad : 0, "", buf);
 }
 
 static int	summary(void)
 {
-	int	p;
-	int	i;
-	int	inner = term_width() - 8;
-	int	tp = 0, tf = 0, ts = 0, tce = 0, tt = 0, fok = 0, fall = 0, miss = 0;
-	int	bad;
+	static const char	*short_names[] = {"", "libc", "supplémentaires",
+		"listes chaînées"};
+	int					p;
+	int					i;
+	int					tp = 0, tf = 0, ts = 0, tce = 0, tt = 0;
+	int					fok = 0, fall = 0, miss = 0;
+	int					bad;
+	char				row[1024];
 
-	if (inner > 76)
-		inner = 76;
-	printf("\n   %s╭", C_GRY);
-	rep("─", (inner - 10) / 2);
-	printf("%s%s RÉSULTAT %s%s", C_RST, C_B, C_RST, C_GRY);
-	rep("─", inner - 10 - (inner - 10) / 2);
-	printf("╮%s\n", C_RST);
-	box_line(inner, "");
+	g_inner = term_width() - 6;
+	if (g_inner > 76)
+		g_inner = 76;
+	printf("\n   %s█▀▀▀%s RÉSULTAT %s", C_PHM, C_INV, C_RST);
+	printf("%s", C_PHM);
+	rep("▀", g_inner - 13);
+	printf("█%s\n", C_RST);
+	box_line("%s", "");
 	for (p = 1; p <= 3; p++)
 	{
 		int		ok = 0, all = 0;
-		char	b[1200];
 
 		for (i = 0; i < NFUNCS; i++)
 		{
@@ -1095,52 +1184,60 @@ static int	summary(void)
 		fok += ok;
 		fall += all;
 		{
-			int		bw = inner - 44;
-			char	mb[700];
+			/* fixed columns, measured in visible characters:
+			   "P1 " + label(16) + " ▕" + bar + "▏ " + "21/23" + "  " + "100%" */
+			int		bw = g_inner - 2 - 34;
+			char	mb[1200];
+			char	lbl[64];
 
-			if (bw < 10)
-				bw = 10;
-			bar(mb, sizeof(mb), ok, all, bw, ok == all ? C_GRN
+			if (bw < 6)
+				bw = 6;
+			bar(mb, sizeof(mb), ok, all, bw, ok == all ? C_PH
 				: ok * 2 >= all ? C_YEL : C_RED);
-			snprintf(b, sizeof(b), "Partie %d %s%-17.17s%s %s %s%2d/%-2d%s "
-				"%3d%%", p, C_GRY, g_part_names[p], C_RST, mb,
-				ok == all ? C_GRN : C_RED, ok, all, C_RST, ok * 100 / all);
+			padv(lbl, sizeof(lbl), short_names[p], 16);
+			box_line("%sP%d%s %s %s▕%s%s▏%s %s%2d/%-2d%s  %3d%%", C_PH, p,
+				C_RST, lbl, C_PHD, mb, C_PHD, C_RST, ok == all ? C_PH : C_RED,
+				ok, all, C_RST, ok * 100 / all);
 		}
-		box_line(inner, "%s", b);
 	}
-	box_line(inner, "");
-	box_line(inner, "%sTests%s      %s%d ✔%s   %s%d ✘%s   %s%d ▲ spéculatif(s)%s"
-		"   %s/ %d%s", C_GRY, C_RST, C_GRN, tp, C_RST, tf ? C_RED : C_GRY, tf,
-		C_RST, ts ? C_YEL : C_GRY, ts, C_RST, C_GRY, tt, C_RST);
+	box_line("%s", "");
+	box_line("%sTESTS %s %s%d ✔%s  %s%d ✘%s  %s%d ▲%s  %s/ %d%s", C_PHD, C_RST,
+		C_GRN, tp, C_RST, tf ? C_RED : C_PHD, tf, C_RST, ts ? C_YEL : C_PHD, ts,
+		C_RST, C_PHD, tt, C_RST);
 	if (tce)
-		box_line(inner, "%s           dont %d crash identique(s) à la libc "
-			"(acceptés)%s", C_CYN, tce, C_RST);
+		box_line("%s       dont %d crash identique(s) à la libc (acceptés)%s",
+			C_CYN, tce, C_RST);
 	if (miss)
-		box_line(inner, "%sFonctions%s  %s%d absente(s)%s", C_GRY, C_RST,
-			C_RED, miss, C_RST);
-	if (o.checks)
-		box_line(inner, "%sVérifs%s     %s%d ✔%s   %s%d ✘%s   %s%d ▲%s   "
-			"%sprototypes %d/%d%s", C_GRY, C_RST, C_GRN, g_ck.ok, C_RST,
-			g_ck.ko ? C_RED : C_GRY, g_ck.ko, C_RST, g_ck.warn ? C_YEL : C_GRY,
-			g_ck.warn, C_RST, g_ck.proto_ok == g_ck.proto_tot ? C_GRN : C_RED,
-			g_ck.proto_ok, g_ck.proto_tot, C_RST);
-	box_line(inner, "");
-	bad = tf + miss + g_ck.ko + (o.spec ? ts : 0);
-	if (!bad)
-		box_line(inner, "%*s%s  ✔ OK  %s  %s%d/%d fonctions parfaites%s",
-			(inner - 34) / 2, "", C_BGG, C_RST, C_GRN, fok, fall, C_RST);
-	else
-		box_line(inner, "%*s%s  ✘ KO  %s  %s%d problème(s) · %d/%d fonctions "
-			"OK%s", (inner - 40) / 2, "", C_BGR, C_RST, C_RED, bad, fok, fall,
+		box_line("%sABSENT%s %s%d fonction(s)%s", C_PHD, C_RST, C_RED, miss,
 			C_RST);
+	if (o.checks)
+		box_line("%sCHECKS%s %s%d ✔%s  %s%d ✘%s  %s%d ▲%s  %sprotos %d/%d%s",
+			C_PHD, C_RST, C_GRN, g_ck.ok, C_RST, g_ck.ko ? C_RED : C_PHD,
+			g_ck.ko, C_RST, g_ck.warn ? C_YEL : C_PHD, g_ck.warn, C_RST,
+			g_ck.proto_ok == g_ck.proto_tot ? C_GRN : C_RED, g_ck.proto_ok,
+			g_ck.proto_tot, C_RST);
+	box_line("%s", "");
+	bad = tf + miss + g_ck.ko + (o.spec ? ts : 0);
+	/* big pixel verdict */
+	for (i = 0; i < 6; i++)
+	{
+		pixel_row(row, sizeof(row), bad ? "KO" : "OK", i,
+			bad ? (i % 2 ? 160 : 196) : (i % 2 ? 40 : 46), bad ? 52 : 22);
+		box_center("%s", row);
+	}
+	if (!bad)
+		box_center("%s%d/%d fonctions parfaites · aucune erreur%s", C_PH, fok,
+			fall, C_RST);
+	else
+		box_center("%s%d problème(s) · %d/%d fonctions OK%s", C_RED, bad, fok,
+			fall, C_RST);
 	if (!o.spec && ts)
-		box_line(inner, "%*s%s%d avertissement(s) ▲ : à savoir défendre en "
-			"correction%s", (inner - 52) / 2 > 0 ? (inner - 52) / 2 : 0, "",
-			C_YEL, ts, C_RST);
-	box_line(inner, "");
-	printf("   %s╰", C_GRY);
-	rep("─", inner);
-	printf("╯%s\n", C_RST);
+		box_center("%s%d avertissement(s) ▲ à savoir défendre%s", C_YEL, ts,
+			C_RST);
+	box_line("%s", "");
+	printf("   %s█", C_PHM);
+	rep("▄", g_inner);
+	printf("█%s\n", C_RST);
 	if (o.log)
 		printf("   %sDétails complets : %s%s\n", C_GRY, o.log, C_RST);
 	printf("\n");
@@ -1196,6 +1293,8 @@ int	main(int ac, char **av)
 			o.timeout = atoi(av[++i]);
 		else if (!strcmp(a, "--no-color"))
 			o.color = 0;
+		else if (!strcmp(a, "--no-banner"))
+			o.no_banner = 1;
 		else
 		{
 			usage();
@@ -1213,8 +1312,10 @@ int	main(int ac, char **av)
 	if (o.log)
 		g_log = fopen(o.log, "w");
 	qsort(g_tests, (size_t)g_ntests, sizeof(t_test), cmp_tests);
-	banner();
+	if (!o.no_banner)
+		banner();
 	print_checks();
+	legend();
 	ti = 0;
 	part = 0;
 	for (i = 0; i < NFUNCS; i++)

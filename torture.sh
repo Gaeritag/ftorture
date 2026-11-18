@@ -35,13 +35,15 @@ Règles des tests "comparés à la vraie fonction" :
 EOF
 }
 
+SPEC=0
+SEED=42
 while [ $# -gt 0 ]; do
 	case "$1" in
-		-s|--speculative) PASS+=("-s") ;;
+		-s|--speculative) PASS+=("-s"); SPEC=1 ;;
 		-v|--verbose) PASS+=("-v") ;;
 		-f|--func) PASS+=("-f" "$2"); shift ;;
 		-p|--part) PASS+=("-p" "$2"); shift ;;
-		--seed) PASS+=("--seed" "$2"); shift ;;
+		--seed) PASS+=("--seed" "$2"); SEED="$2"; shift ;;
 		--timeout) PASS+=("--timeout" "$2"); shift ;;
 		--no-color) PASS+=("--no-color"); export NO_COLOR=1 ;;
 		--no-checks) DO_CHECKS=0 ;;
@@ -54,14 +56,18 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -t 1 ] && [ -z "$NO_COLOR" ]; then
-	R=$'\033[38;5;203m'; G=$'\033[38;5;114m'; Y=$'\033[38;5;221m'
+	R=$'\033[38;5;203m'; G=$'\033[38;5;82m'; Y=$'\033[38;5;221m'
 	D=$'\033[38;5;244m'; B=$'\033[1m'; X=$'\033[0m'; CL=$'\r\033[K'
+	PH=$'\033[38;5;46m'; PHM=$'\033[38;5;34m'; PHD=$'\033[38;5;22m'; COLOR=1
 else
-	R=""; G=""; Y=""; D=""; B=""; X=""; CL=""
+	R=""; G=""; Y=""; D=""; B=""; X=""; CL=""; PH=""; PHM=""; PHD=""; COLOR=""
 fi
 
 die() { printf '%s\n %s✘ %s%s\n\n' "$CL" "$R$B" "$*" "$X" >&2; exit 2; }
-step() { [ -t 1 ] && printf '%s %s⧗ %s…%s' "$CL" "$D" "$*" "$X"; }
+# retro progress line, rewritten in place:   ▶ norminette…
+step() { [ -t 1 ] && printf '%s   %s▶%s %s%s…%s' "$CL" "$PH" "$X" "$PHM" "$*" "$X"; }
+# shellcheck source=header.sh
+. "$FT_DIR/header.sh"
 
 [ "$(uname -s)" = "Linux" ] || printf ' %s▲ ftorture vise Linux (prototypes, --wrap, glibc). Résultats non garantis sur %s.%s\n' "$Y" "$(uname -s)" "$X"
 command -v "$CC_BIN" >/dev/null || die "compilateur '$CC_BIN' introuvable"
@@ -69,6 +75,7 @@ command -v make >/dev/null || die "make introuvable"
 command -v nm >/dev/null || die "nm introuvable (binutils)"
 
 LIBFT="$(cd "$LIBFT" 2>/dev/null && pwd)" || die "dossier libft introuvable"
+header
 mkdir -p "$BUILD" || die "impossible de créer $BUILD"
 CHECKS="$BUILD/checks.txt"
 : > "$CHECKS"
@@ -371,4 +378,4 @@ fi
 CHK_ARGS=()
 [ $DO_CHECKS -eq 1 ] && CHK_ARGS=(--checks "$CHECKS")
 cd "$BUILD" || exit 2
-exec "$BUILD/ftorture_tester" "${CHK_ARGS[@]}" --path "$LIBFT" --log "$FT_DIR/ftorture.log" "${PASS[@]}"
+exec "$BUILD/ftorture_tester" --no-banner "${CHK_ARGS[@]}" --path "$LIBFT" --log "$FT_DIR/ftorture.log" "${PASS[@]}"

@@ -14,7 +14,7 @@ télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes
 ## Installation
 
 ```bash
-git clone <ton-repo> ~/ftorture
+git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
 source ~/.zshrc        # ou ~/.bashrc
 ```

@@ -14,7 +14,7 @@ nothing to download, you only need `cc`, `make` and `nm`. Built for **Linux** (4
 ## Installation
 
 ```bash
-git clone <your-repo> ~/ftorture
+git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
 source ~/.zshrc        # or ~/.bashrc
 ```
