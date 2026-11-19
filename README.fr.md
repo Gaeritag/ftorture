@@ -21,7 +21,7 @@ Aucun paquet pip requis ; norminette reste facultative.
 
 ## Installation
 
-```text
+```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && python3 install.py
 ```
@@ -43,7 +43,7 @@ La langue suit la locale (`fr_*` : français, sinon anglais). Utilise
 
 ### Menu interactif
 
-```text
+```bash
 torture
 ```
 
@@ -53,7 +53,7 @@ Les options de test se passent en ligne de commande.
 
 ### En ligne de commande
 
-```text
+```bash
 torture libft ~/libft                # une libft
 torture printf ~/ft_printf           # un ft_printf (obligatoire + bonus)
 torture gnl ~/get_next_line          # une get_next_line (tous les BUFFER_SIZE)

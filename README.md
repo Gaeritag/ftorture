@@ -21,7 +21,7 @@ No pip packages are needed; norminette is optional.
 
 ## Installation
 
-```text
+```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && python3 install.py
 ```
@@ -44,7 +44,7 @@ interactive menu and the plain-text report.
 
 ### Interactive menu
 
-```text
+```bash
 torture
 ```
 
@@ -54,7 +54,7 @@ Pass test options on the command line.
 
 ### Command line
 
-```text
+```bash
 torture libft ~/libft                # a libft
 torture printf ~/ft_printf           # a ft_printf (mandatory + bonus)
 torture gnl ~/get_next_line          # a get_next_line (every BUFFER_SIZE)

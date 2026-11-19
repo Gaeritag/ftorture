@@ -15,7 +15,7 @@ Use this skill when asked to test, diagnose, or explain results for a 42 **libft
 
 ## Run targeted tests first
 
-```text
+```bash
 torture libft  /path/to/libft -f strlen,split -v
 torture printf /path/to/ft_printf -p 1 -f %d,%s -v
 torture gnl    /path/to/get_next_line -p 1 -f 1,42
