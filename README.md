@@ -27,7 +27,9 @@ source ~/.zshrc        # or ~/.bashrc
 
 `install.sh` adds the **`torture`** command to bash, zsh and fish.
 
-> The terminal output is in French.
+Terminal output follows your locale (French for `fr_*`, English otherwise).
+Use `--lang en` or `--lang fr` to override it for any run, including the
+interactive menu and the plain-text report.
 
 ## Usage
 
