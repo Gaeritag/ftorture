@@ -100,6 +100,7 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 | `--no-color` | no colors |
 | `--lang en\|fr` | override the detected output language |
 | `--list-projects` | list supported project modules and subject versions |
+| `--custom-tests-dir DIR` | use user test manifests from this directory instead of the default config location |
 
 Without installing, run `python3 /path/to/ftorture/torture.py …` or, from the
 checkout, `python3 -m ftorture …`. Paths containing spaces are supported.
@@ -110,6 +111,22 @@ At the end, ftorture runs your project's `make clean` (libft, ft_printf), even a
 error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
 ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
+
+### Custom tests
+
+Write your own tests without editing ftorture: put versioned JSON manifests and
+scripts in `${XDG_CONFIG_HOME:-$HOME/.config}/ftorture/tests/`. They appear after
+the bundled projects in the main menu with a distinct cyan **[CUSTOM]** label.
+Each suite supports build/cleanup commands, named tests, filters, parts, timeouts,
+expected exit codes, speculative verdicts, and logs. Only run trusted suites:
+commands execute with your permissions and are not sandboxed.
+
+```bash
+python3 torture.py --custom-tests-dir examples/custom-tests custom-readme /path/to/project -v
+```
+
+See the [custom-test guide](docs/custom-tests.md) for the schema, example, and
+limitations. Native C projects remain independently extensible through `Project`.
 
 ### Python architecture and contributor interface
 
@@ -122,9 +139,12 @@ prevent concurrent executions from corrupting build files and reports.
 Include-use analysis is heuristic: unresolved headers get no verdict. Review
 findings involving complex macros or conditional compilation against the subject.
 
-Add a project module under `ftorture/projects/`, implement the `Project` interface
+`ftorture/registry.py` combines bundled project modules and validated custom
+manifests for CLI listing, selection, and the TUI. Add a project module under `ftorture/projects/`, implement the `Project` interface
 (`validate`, `checks`, `run`, `cleanup`), and register its `PROJECT` in
 `ftorture/projects/__init__.py`. The CLI/menu discover it from that registry.
+Project metadata declares `requires_compiler` and `requires_makefile`; command-only
+strategies need not inherit C tool dependencies or Makefile path validation.
 Use `ArchiveProject` for Makefile archives or implement a source build strategy
 like `GnlProject`. Reuse the native checks in `ftorture/subject/` with policies
 appropriate to the new subject; `CheckReport` in `ftorture/checks.py` writes engine check
@@ -132,8 +152,10 @@ records without hand-building delimiters. See [the tester authoring skill](skill
 
 ```text
 ftorture/cli.py           CLI, validation, lock, lifecycle
+ftorture/registry.py      unified bundled/custom project registry
 ftorture/runtime.py       options, subprocesses, artifacts, C-engine interface
 ftorture/projects/       project registry and build/test strategies
+ftorture/projects/custom.py  user manifest loading and command-suite strategy
 ftorture/checks.py        check records and compiler/tool probes
 ftorture/subject/        native file, Makefile, include, symbol and prototype checks
 ftorture/ui.py, i18n.py   menu and language selection

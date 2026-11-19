@@ -13,6 +13,7 @@ class ArchiveProject(Project):
     source_dir: str = ""
     symbol_prefix: str = "ft_"
     tools: tuple[str, ...] = ("make", "nm")
+    requires_makefile: bool = True
 
     def validate(self, ctx: Context) -> None:
         super().validate(ctx)

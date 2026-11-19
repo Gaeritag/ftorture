@@ -98,6 +98,7 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `--no-color` | sans couleurs |
 | `--lang en\|fr` | choisir la langue de sortie |
 | `--list-projects` | lister les projets et versions de sujet |
+| `--custom-tests-dir DIR` | remplacer le dossier par défaut des tests personnalisés |
 
 Sans installation : `python3 /chemin/ftorture/torture.py …`, ou
 `python3 -m ftorture …` depuis le dépôt. Les chemins avec espaces sont acceptés.
@@ -108,6 +109,22 @@ lanceurs de compatibilité ; toute la logique est en Python.
 une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
+
+### Tests personnalisés
+
+Ajoute tes tests sans modifier ftorture : place des manifestes JSON versionnés et
+leurs scripts dans `${XDG_CONFIG_HOME:-$HOME/.config}/ftorture/tests/`. Ils apparaissent
+après les projets intégrés dans le menu principal avec un libellé cyan **[CUSTOM]**.
+Chaque suite gère compilation/préparation, nettoyage, tests nommés, filtres,
+parties, délais, codes de sortie attendus, avertissements spéculatifs et rapports.
+N'exécute que des suites fiables : elles disposent de tes permissions, sans sandbox.
+
+```bash
+python3 torture.py --custom-tests-dir examples/custom-tests custom-readme /chemin/projet -v
+```
+
+Le [guide des tests personnalisés](docs/custom-tests.md) décrit le format, un
+exemple et les limites. Les tests C natifs restent extensibles via `Project`.
 
 ### Architecture Python et ajout de projets
 
@@ -120,9 +137,12 @@ contre les exécutions concurrentes.
 L'analyse des includes est heuristique : aucun verdict sur un en-tête non résolu.
 Vérifie manuellement les cas impliquant des macros complexes ou la compilation conditionnelle.
 
-Ajoute un module dans `ftorture/projects/`, implémente `Project` (`validate`,
+`ftorture/registry.py` réunit les projets intégrés et les manifestes personnalisés
+pour la CLI et le TUI. Ajoute un module dans `ftorture/projects/`, implémente `Project` (`validate`,
 `checks`, `run`, `cleanup`), puis enregistre `PROJECT` dans
 `ftorture/projects/__init__.py`. La CLI et le menu utilisent ce registre.
+Les métadonnées `requires_compiler` et `requires_makefile` permettent d'intégrer
+des stratégies sans compilateur C ni Makefile.
 `ArchiveProject` fournit la stratégie Makefile/archive ; `GnlProject` illustre la
 compilation directe des sources. Les nouveaux projets doivent écrire leurs
 vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. Voir le

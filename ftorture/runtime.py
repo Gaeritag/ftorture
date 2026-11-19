@@ -70,7 +70,8 @@ class Context:
         return text(self.options.lang, en, fr)
 
     def command(self, args: list[str | Path], *, cwd: Path | None = None,
-                log: Path | None = None, env: dict[str, str] | None = None) -> int:
+                log: Path | None = None, env: dict[str, str] | None = None,
+                timeout: int | None = None) -> int:
         command = [str(arg) for arg in args]
         progress = log is not None and sys.stdout.isatty()
         if progress:
@@ -79,13 +80,13 @@ class Context:
             green, dim, reset = ("\033[38;5;46m", "\033[38;5;34m", "\033[0m") if color else ("", "", "")
             print(f"\r\033[K   {green}▶{reset} {dim}{label}…{reset}", end="", flush=True)
         try:
-            return self._command(command, cwd=cwd, log=log, env=env)
+            return self._command(command, cwd=cwd, log=log, env=env, timeout=timeout)
         finally:
             if progress:
                 print("\r\033[K", end="", flush=True)
 
     def _command(self, command: list[str], *, cwd: Path | None,
-                 log: Path | None, env: dict[str, str] | None) -> int:
+                 log: Path | None, env: dict[str, str] | None, timeout: int | None) -> int:
         with log.open("w") if log else nullcontext(None) as output:
             # A private session lets cancellation stop make/compiler/test children
             # before cleanup touches the student's build artifacts.
@@ -93,8 +94,8 @@ class Context:
                                   stderr=subprocess.STDOUT if log else None,
                                   start_new_session=True) as process:
                 try:
-                    return process.wait()
-                except KeyboardInterrupt:
+                    return process.wait(timeout=timeout)
+                except (KeyboardInterrupt, subprocess.TimeoutExpired) as exc:
                     try:
                         os.killpg(process.pid, signal.SIGTERM)
                     except ProcessLookupError:
@@ -102,9 +103,17 @@ class Context:
                     try:
                         process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
-                        os.killpg(process.pid, signal.SIGKILL)
+                        pass
+                    finally:
+                        # The parent may have stopped while a descendant ignored TERM.
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
                         process.wait()
-                    raise
+                    if isinstance(exc, KeyboardInterrupt):
+                        raise
+                    return 124
 
     def compile(self, args: list[str | Path], log: Path) -> bool:
         return self.command([*self.cc, *args], log=log) == 0

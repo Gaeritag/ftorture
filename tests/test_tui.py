@@ -74,6 +74,26 @@ class PtySession:
 
 
 class TuiTests(unittest.TestCase):
+    def test_custom_suite_is_distinct_and_selectable_in_main_menu(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifests = Path(tmp) / "tests"
+            manifests.mkdir()
+            (manifests / "mine.json").write_text(json.dumps({
+                "version": 1, "key": "mine", "name": "My personal suite",
+                "tests": [{"name": "one", "command": ["true"]}]}))
+            session = self.session(tmp, ("--lang", "en", "--no-color", "--custom-tests-dir", str(manifests)))
+            session.expect("[CUSTOM]")
+            session.expect("q quit")
+            session.send(b"4")
+            session.expect("path : ")
+            session.send(b"\n")
+            session.expect("Enter start · q quit")
+            session.send(b"\n")
+            session.expect("SELECTED:")
+            selected = json.loads(session.expect("\n").strip())
+            self.assertEqual(selected["project"], "custom-mine")
+            session.finish()
+
     def session(self, directory, args=()):
         session = PtySession(directory, args)
         self.addCleanup(session.close)

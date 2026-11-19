@@ -9,7 +9,7 @@ import signal
 import sys
 
 from .i18n import default_language, text
-from .projects import PROJECTS, detect, find
+from .registry import load_registry
 from .projects.base import Project
 from .runtime import Context, Options, RunnerError
 from .ui import interactive, run_header
@@ -46,6 +46,7 @@ def parser(lang: str) -> argparse.ArgumentParser:
     result.add_argument("directory", nargs="?", help=t("project directory", "dossier du projet"))
     result.add_argument("--lang", choices=("en", "fr"), default=lang, help=t("output language", "langue"))
     result.add_argument("--list-projects", action="store_true", help=t("list supported projects", "lister les projets"))
+    result.add_argument("--custom-tests-dir", type=Path, help=t("directory of user test manifests", "dossier des tests personnalisés"))
     result.add_argument("-s", "--speculative", action="store_true", help=t("count ▲ as failures", "compter les ▲ comme erreurs"))
     result.add_argument("-v", "--verbose", action="store_true", help=t("show all failure details", "afficher tous les détails"))
     result.add_argument("-f", "--func", help=t("function or BUFFER_SIZE filter", "filtre fonction ou BUFFER_SIZE"))
@@ -79,7 +80,8 @@ def execute(ctx: Context, project: Project) -> int:
     if platform.system() != "Linux":
         raise RunnerError(ctx.message("This runner requires Linux.", "Ce lanceur exige Linux."))
     project.validate(ctx)
-    tools = (ctx.cc[0], *project.tools, *(project.check_tools if ctx.options.checks else ()))
+    tools = (*(ctx.cc[:1] if project.requires_compiler else ()), *project.tools,
+             *(project.check_tools if ctx.options.checks else ()))
     for tool in tools:
         if not shutil.which(tool):
             raise RunnerError(ctx.message("Missing dependency:", "Dépendance absente :") + f" {tool}")
@@ -102,10 +104,6 @@ def main(argv: list[str] | None = None) -> int:
     lang = language.parse_known_args(argv)[0].lang
     cli = parser(lang)
     args = cli.parse_intermixed_args(argv)
-    if args.list_projects:
-        for project in PROJECTS:
-            print(f"{project.key:8} {project.name:16} {project.subject}")
-        return 0
     old_term = signal.getsignal(signal.SIGTERM)
 
     def interrupt(signum, frame):
@@ -113,7 +111,13 @@ def main(argv: list[str] | None = None) -> int:
 
     signal.signal(signal.SIGTERM, interrupt)
     try:
-        project = find(args.target) if args.target else None
+        registry = load_registry(args.custom_tests_dir)
+        if args.list_projects:
+            for project in registry.projects:
+                label = " [CUSTOM]" if project.custom else ""
+                print(f"{project.key:8} {project.name:16} {project.subject}{label}")
+            return 0
+        project = registry.find(args.target)
         if project is not None:
             directory = Path(args.directory or ".").expanduser().resolve()
         elif args.directory:
@@ -127,9 +131,9 @@ def main(argv: list[str] | None = None) -> int:
                           seed=args.seed, part=args.part, functions=args.func, timeout=args.timeout,
                           no_color=args.no_color, ignore_hidden=args.no_hidden)
         if args.target is None and sys.stdin.isatty() and sys.stdout.isatty():
-            project, options = interactive(options)
+            project, options = interactive(options, registry)
         else:
-            project = project or detect(directory)
+            project = project or registry.detect(directory)
         if project is None:
             raise RunnerError(text(lang, "No supported project header found.", "Aucun en-tête de projet reconnu."))
         return execute(Context(ROOT, project.key, options), project)

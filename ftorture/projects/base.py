@@ -15,6 +15,9 @@ class Project(ABC):
     aliases: tuple[str, ...] = ()
     tools: tuple[str, ...] = ("nm",)
     check_tools: tuple[str, ...] = ()
+    requires_compiler: bool = True
+    requires_makefile: bool = False
+    custom: bool = False
 
     def validate(self, ctx: Context) -> None:
         if not (ctx.options.directory / self.header).is_file():

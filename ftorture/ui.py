@@ -11,7 +11,7 @@ import termios
 import tty
 
 from .i18n import text
-from .projects import PROJECTS, detect
+from .registry import Registry
 from .runtime import Options
 
 FONT = {
@@ -69,6 +69,8 @@ class Terminal:
         tag = self.t("> your code will talk", "> ton code va parler")
         if project:
             subtitle = f"{project.name.upper()} · {self.t('SUBJECT', 'SUJET')} v{project.subject} · LINUX"
+            if project.custom:
+                subtitle = f"[CUSTOM] {project.name}"
             tags = {"libft": ("> your libft will talk", "> ta libft va parler"),
                     "printf": ("> your printf will talk", "> ton printf va parler"),
                     "gnl": ("> your gnl will talk", "> ta gnl va parler")}
@@ -123,9 +125,10 @@ def read_key() -> str:
         termios.tcsetattr(fd, termios.TCSANOW, saved)
 
 
-def choose_project(terminal: Terminal):
-    guess = detect(Path.cwd())
-    selected = PROJECTS.index(guess) if guess else 0
+def choose_project(terminal: Terminal, registry: Registry):
+    projects = registry.projects
+    guess = registry.detect(Path.cwd())
+    selected = projects.index(guess) if guess else 0
     descriptions = {
         "libft": terminal.t("libft.a · 43 functions · parts 1, 2, 3", "libft.a · 43 fonctions · parties 1, 2, 3"),
         "printf": terminal.t("libftprintf.a · cspdiuxX% · bonus -0. width # +", "libftprintf.a · cspdiuxX% · bonus -0. largeur # +"),
@@ -133,16 +136,19 @@ def choose_project(terminal: Terminal):
     }
     while True:
         terminal.heading("WHICH PROJECT TO TEST?", "QUEL PROJET ON TORTURE ?")
-        labels = [(p.key.upper() if p.key != "printf" else "FT_PRINTF", descriptions.get(p.key, p.name))
-                  for p in PROJECTS] + [(terminal.t("QUIT", "QUITTER"), "")]
+        labels = [(p.name if p.custom else p.key.upper() if p.key != "printf" else "FT_PRINTF",
+                   ("[CUSTOM] " if p.custom else "") + descriptions.get(p.key, p.name))
+                  for p in projects] + [(terminal.t("QUIT", "QUITTER"), "")]
         for index, (label, description) in enumerate(labels):
+            shade = terminal.escape("38;5;80") if index < len(projects) and projects[index].custom else terminal.medium
             if index == selected:
                 terminal.write(f"   {terminal.inverse}▶ {label:<12}{terminal.reset} {terminal.ph}{description}{terminal.reset}\n")
             else:
-                terminal.write(f"     {terminal.medium}{label:<12}{terminal.reset} {terminal.dark}{description}{terminal.reset}\n")
+                terminal.write(f"     {shade}{label:<12}{terminal.reset} {shade if '[CUSTOM]' in description else terminal.dark}{description}{terminal.reset}\n")
+        shortcuts = "1 2 3" if len(projects) == 3 else " ".join(str(i) for i in range(1, min(len(projects), 9) + 1))
         terminal.write(f"\n   {terminal.dark}" + terminal.t(
-            "↑ ↓ select · Enter confirm · 1 2 3 shortcuts · q quit",
-            "↑ ↓ choisir · Entrée valider · 1 2 3 raccourcis · q quitter") + terminal.reset + "\n")
+            f"↑ ↓ select · Enter confirm · {shortcuts} shortcuts · q quit",
+            f"↑ ↓ choisir · Entrée valider · {shortcuts} raccourcis · q quitter") + terminal.reset + "\n")
         if guess:
             terminal.write(f"   {terminal.dark}" + terminal.t(
                 f"(current directory: {guess.key} detected)", f"(dossier courant : {guess.key} détecté)") + terminal.reset + "\n")
@@ -151,13 +157,13 @@ def choose_project(terminal: Terminal):
             selected = (selected - 1) % len(labels)
         elif key == "down":
             selected = (selected + 1) % len(labels)
-        elif key.isdigit() and 1 <= int(key) <= len(PROJECTS):
-            return PROJECTS[int(key) - 1]
-        elif key == "quit" or (key == "enter" and selected == len(PROJECTS)):
+        elif key.isdigit() and 1 <= int(key) <= len(projects):
+            return projects[int(key) - 1]
+        elif key == "quit" or (key == "enter" and selected == len(projects)):
             terminal.clear()
             raise EOFError
         elif key == "enter":
-            return PROJECTS[selected]
+            return projects[selected]
 
 
 def complete_path(value: str, state: int):
@@ -202,9 +208,9 @@ def choose_path(terminal: Terminal, project) -> Path:
         directory = Path(value).expanduser()
         if not directory.is_dir():
             error = terminal.t("directory not found: ", "dossier introuvable : ") + value
-        elif project.key != "gnl" and not (directory / "Makefile").is_file():
+        elif project.requires_makefile and not (directory / "Makefile").is_file():
             error = terminal.t("no Makefile in ", "pas de Makefile dans ") + value
-        elif not (directory / project.header).is_file():
+        elif project.header and not (directory / project.header).is_file():
             error = terminal.t(f"no {project.header} in ", f"pas de {project.header} dans ") + value
         else:
             return directory.resolve()
@@ -218,7 +224,11 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
         terminal.t("checks (Makefile, nm, prototypes, README…)", "vérifications (Makefile, nm, prototypes, README…)"),
         "norminette", terminal.t("ignore hidden files (--no-hidden)", "ignorer les fichiers cachés (--no-hidden)"),
     ]
-    values = [options.speculative, options.verbose, options.checks, options.norm, options.ignore_hidden]
+    keys = ["speculative", "verbose", "checks", "norm", "ignore_hidden"]
+    if project.custom:
+        # Subject/norm/include switches have no meaning for user command suites.
+        labels, keys = labels[:2], keys[:2]
+    values = [getattr(options, key) for key in keys]
     selected = len(labels)
     while True:
         terminal.clear()
@@ -244,17 +254,16 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
         elif key in ("space", "enter") and selected < len(labels):
             values[selected] = not values[selected]
         elif key == "enter":
-            return replace(options, speculative=values[0], verbose=values[1], checks=values[2],
-                           norm=values[3], ignore_hidden=values[4])
+            return replace(options, **dict(zip(keys, values)))
         elif key == "quit":
             terminal.clear()
             raise EOFError
 
 
-def interactive(options: Options):
+def interactive(options: Options, registry: Registry | None = None):
     terminal = Terminal(options.lang, options.no_color)
     with terminal_session(terminal):
-        project = choose_project(terminal)
+        project = choose_project(terminal, registry or Registry())
         options = replace(options, directory=choose_path(terminal, project))
         options = choose_options(terminal, project, options)
     terminal.clear()

@@ -197,6 +197,8 @@ class RunnerTests(unittest.TestCase):
 
     def test_cleanup_after_interruption(self):
         class InterruptedProject:
+            requires_compiler = True
+            custom = False
             name = "fake"
             key = "fake"
             subject = "1"
