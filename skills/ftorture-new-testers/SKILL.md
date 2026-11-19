@@ -1,25 +1,56 @@
 ---
 name: ftorture-new-testers
-description: Design and add reliable ftorture suites for new 42 projects, with subject-aware checks, C tests, safe fixtures, and end-to-end validation.
+description: Extend ftorture's Python project registry and native subject checks with reliable C suites for additional 42 projects, including build strategies and regression tests.
 ---
 
-# Add a tester for another 42 project
+# Add a project tester
 
-Use this skill when extending **ftorture itself**, not when testing a student's project. First read the exact 42 subject/version, `ftorture/projects/base.py`, `ftorture/runtime.py`, the nearest project module, `ftorture/subject/`, `src/engine.c`, `src/project.h`, and `src/zft.h`. Python implements installation, checks, builds and passes; C implements the engine and test suites. Reuse native checks with subject-specific policies. Do not assume libft's rules apply to another subject.
+Use this skill when changing **ftorture**, not a student's submission. Installation, CLI, builds, checks, and pass coordination are Python-native; the process-isolated test engine and suites remain C. Read the exact subject/version first. Do not reuse another project's rules merely because its build looks similar.
 
-## Design and integration
+## Architecture map
 
-1. Record mandatory/bonus deliverables, prototypes, compiler flags, allowed external functions, undefined behavior, resource limits, and expected exit behavior **from the subject**. Keep mandatory and bonus checks separate. Specify when a warning is speculative instead of required.
-2. Add `ftorture/projects/<project>.py`, define a `Project` subclass and a `PROJECT` instance with a stable key, aliases, header, subject version, valid parts, and dependencies; register it in `ftorture/projects/__init__.py`. The CLI, detector, and menu use the registry without extra project-specific branches. Implement `validate(ctx)`, native `checks(ctx)`, `run(ctx) -> int`, and `cleanup(ctx)`. Reuse `ArchiveProject` for Makefile archives or follow `GnlProject` for direct compilation. Use `Context.command`/`compile`/`tester`, argument lists (never shell interpolation), and paths from `ctx.root`, `ctx.build`, and `ctx.options.directory`. Keep artifacts in `build/<project>/`; do not delete user files outside documented cleanup rules.
-3. Define exactly one `g_proj` descriptor for that tester executable in `src/<project>/proj.c` (see `src/project.h`). Give each suite a stable key, display label, part number, and function address; weak declarations allow a missing student symbol to be reported rather than crashing during link. Add subject-derived prototypes to `protos/<project>.txt` if prototype checks apply; adapt checks instead of copying another project's rules.
-4. Link `src/engine.c`, `src/memtrack.c`, the new suite sources, and student sources/archive with the necessary include paths. Existing suites use `-Wl,--wrap=malloc -Wl,--wrap=free`; add other wrappers only when justified by the subject. For archives, configure `symbol_prefix` (default `ft_`) to force-link weak student symbols, and override `extra_archives` for dependencies. Use `CheckReport` from `ftorture/checks.py` to create sections, check results, details, and prototypes, then `report.write(ctx.checks_file)`; it escapes record separators. Localize whole messages, never user data or compiler source. Audit engine project-specific assumptions (including localization) when adding a new descriptor. Preserve reports, cleanup, mandatory/bonus separation, and exit statuses: `0` pass, `1` tests/checks failed, `2` operational error, `130` interruption.
+| Component | Responsibility |
+|---|---|
+| `ftorture/cli.py` | Argument validation, dependency checks, checkout lock, lifecycle and interruption handling |
+| `ftorture/projects/base.py` | `Project` metadata and `validate`, `checks`, `run`, `cleanup` hooks |
+| `ftorture/projects/__init__.py` | Explicit `PROJECTS` registry, aliases and header-based detection; also drives the menu |
+| `ftorture/projects/archive.py` | Makefile/archive building and linking; compare `libft.py`/`printf.py` |
+| `ftorture/projects/gnl.py` | Example source-only strategy with multiple compiled test passes |
+| `ftorture/runtime.py` | `Options`, `Context`, subprocess cancellation, paths, compiler flags and C-engine arguments |
+| `ftorture/checks.py` | `CheckSession` probes/localized messages and delimiter-safe `CheckReport` records |
+| `ftorture/subject/` | Native file, README, norm, include-use, symbol, prototype and project-specific checks |
+| `src/zft.h`, `src/project.h` | C test macros/helpers and suite descriptor contract |
+| `src/engine.c`, `src/memtrack.c` | Forked execution, reference comparison, allocation instrumentation and reports |
 
-## Write trustworthy C tests
+## Integrate the project
 
-- Put focused tests in `src/<project>/t_*.c`, using `TEST(suite, "case")`, `SPEC_TEST` only for non-required behavior, `VS`/`VS_SPEC` for a justified reference, and `MTEST` for allocation-failure resilience. Tests register through constructors in `src/zft.h`; suite keys must match the descriptor. The engine forks each run, so communicate comparison values with `OUT(...)` on **both** paths of `VS`, and use `PICK(student_fn, reference_fn)` for reference selection. A reference implementation must be independent of the student code; libc is not a valid oracle for every subject behavior.
-- Add `INPUT(...)` before a failure-prone call, then assert with `CHECK`, `EQ_INT`, `EQ_SZ`, `EQ_STR`, or `EQ_MEM`. Compare exact output bytes and return values for output projects (see `src/printf/pf.h`), not just visible text. For size/ownership requirements use `alloc_size`, `gstr`/`gmem`/`gbuf`, and clean up allocations and file descriptors. Use `XFREE` for memory originating from either the student or reference path.
-- For `MTEST`, bracket relevant allocations with `ARM()`/`DISARM()`; the engine replays each allocation failure and treats crashes/leaks as errors. Keep randomized cases deterministic with `zrand()` and `--seed`; avoid flaky timing and assumptions beyond the Linux/subject contract. Mark undefined or implementation-dependent cases speculative rather than demanding one arbitrary result.
+1. Extract mandatory/bonus files, prototypes, allowed functions, flags, behavior, resource limits, and undefined cases from the subject. Define the oracle and which cases are speculative. Executable-based or interactive projects may need a new build/capture strategy; the existing archive strategy is not a universal harness.
+2. Add `ftorture/projects/<key>.py` with a `Project` subclass and a `PROJECT` instance. Set a unique stable key, name, header, subject version, valid `parts`, aliases, `tools`, and optional `check_tools` (required only when checks run). Import/register the instance in `PROJECTS`; retain deliberate detection priority where headers overlap. No CLI/menu branches should be needed for an ordinary registered project.
+3. Call `super().validate(ctx)` before additional validation. Implement `checks(ctx)` with the subject's own policy; the base method intentionally fails rather than pretending checks exist. Implement `run(ctx) -> int`; put cleanup in `cleanup(ctx)`, which the CLI calls in `finally`, including after errors/interruption.
+4. For archives, extend `ArchiveProject`, configure `archive`, `source_dir`, and `symbol_prefix` (default `ft_`), then use `build_archive`, `link`, and `ctx.tester`. Override `extra_archives` for linked dependencies. For source-only projects, use `ctx.compile`/`require` and explicit passes as in GNL. Pass argument lists, never interpolated command strings; use `ctx.cc` to preserve compiler arguments.
+5. Keep artifacts under `ctx.build`; use `ctx.root` for tester resources and `ctx.options.directory` for student files. `ctx.engine_args`/`tester` forward language, seed, flags, report paths and filters; do not reconstruct them unnecessarily. Multi-pass runs must carry `ctx.stats` with `--stats-out`/`--stats-in`, display checks once, and print one final summary. Translate project-level filters to suite keys when necessary (GNL uses `function_filter=False`). Never report skipped bonus as passed.
 
-## Validate before shipping
+## Implement native checks
 
-Run `python3 -m unittest discover -s tests -v` and compile the new tester, then run focused and full mandatory/bonus suites against a **known-good** implementation and deliberately broken fixtures. Add unit tests for module selection/checks and integration tests for actual C-engine results. Verify missing symbols, skipped bonus (never passed), `-f`/`-p` filtering, `-s`, deterministic seeds, operational errors, interruption cleanup, and paths with spaces. Keep temporary student fixtures out of the source tree. Update both READMEs with the subject version, usage, scope, and limitations. Never weaken tests just to make a particular student implementation pass.
+Use `CheckSession(ctx)` and persist `session.report.write(ctx.checks_file)` in `finally`. `session.capture` returns `(status, output)` and saves numbered diagnostics; `session.compiler` writes and compiles a C probe. `session.check` selects complete English/French labels and details. Do not translate user data or generated source.
+
+Reuse `check_files(session, allowed_predicate)`, `check_readme`, `check_norm`, `IncludeAnalysis(session).run()`, and `check_symbols` from `ftorture/subject/` with explicit subject policies. The existing `allowed_path` and archive/GNL check orchestrators encode current projects, not arbitrary new subjects. If using `check_prototypes`, supply `protos/<key>.txt` entries as `name|function-pointer type|displayed prototype`; `linked_list=True` is specifically libft's layout requirement. Include-use analysis is heuristic: unresolved headers must not be invented into failures.
+
+`CheckReport` writes engine records through `section`, `check` (`OK`, `KO`, `WARN`, `SKIP`), `detail`, `prototype`, and `end_prototypes`; do not hand-concatenate delimiters. Missing or wrong requirements are check failures, not operational exceptions. Use `RunnerError` for an inability to build/run/check, and preserve status semantics: `0` pass, `1` tests/checks failed, `2` operational error, `130` interruption.
+
+## Write and link C suites
+
+- Add `src/<key>/proj.c` defining exactly one `g_proj` and suites with stable keys, labels, part numbers, and student function addresses. Weak declarations let missing symbols be reported; archive symbols must still be force-linked via the correct prefix. Audit the engine before expanding it: part arrays currently allow parts 1–3, statistics storage is bounded, and localization contains project-specific assumptions.
+- Put tests in `src/<key>/t_*.c`. Match each `TEST` suite key to the descriptor. Use `SPEC_TEST` for non-required behavior, `VS`/`VS_SPEC` with an independent justified reference, and `MTEST` for allocation failures. For comparisons, use `PICK(student, reference)` and `OUT(...)` on both reference paths; libc is not an oracle for every subject requirement.
+- Record `INPUT(...)` before risky calls. Assert exact values/bytes with `CHECK`, `EQ_INT`, `EQ_SZ`, `EQ_STR`, or `EQ_MEM`. Capture bytes **and** return values for output projects; see `src/printf/pf.h`. Use `gstr`/`gmem`/`gbuf` and `alloc_size` when relevant; free allocations and close descriptors. Use `XFREE` when an allocation may originate from either reference path.
+- Bracket only relevant student allocations with `ARM()`/`DISARM()` in `MTEST`; failure replays must not crash or leak. Use `zrand()`/`--seed` for deterministic fuzzing, not timing-dependent randomness. Link the engine, memory tracker, suite sources and student objects with appropriate wrappers; current suites wrap `malloc`/`free`, and GNL additionally wraps `read`.
+
+## Validate and document
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m ftorture --list-projects
+python3 torture.py <key> /path/to/known-good-project --no-norm
+```
+
+Add native-check regressions in `tests/test_subject_checks.py` and real-engine integration coverage in `tests/test_python_runner.py`, or focused new test modules. Use temporary student fixtures. Cover known-good and broken behavior, wrong/missing symbols/prototypes, build errors, complete/partial bonus support, filters/parts, speculative mode, repeatable seeds, language, spaces in paths, and interruption cleanup. Run full mandatory/bonus suites as well as focused tests. Tests overwrite shared checkout artifacts/reports; run serially. Update both READMEs with the subject version, commands and limitations. Never weaken an oracle to accommodate one student's code.
