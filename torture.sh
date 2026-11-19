@@ -23,9 +23,52 @@ PART=""
 FUNC_FILTER=""
 TIMEOUT=""
 NARGS=$#
+[ "$#" -eq 2 ] && [ "$1" = --lang ] && NARGS=0
+
+# Explicit language overrides locale detection; English is the fallback.
+LANG_CODE="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
+case "$LANG_CODE" in fr*) LANG_CODE=fr ;; *) LANG_CODE=en ;; esac
+for ((li=1; li<=$#; li++)); do
+	if [ "${!li}" = --lang ]; then
+		lj=$((li + 1))
+		[ "$lj" -le "$#" ] || { echo 'Missing value for --lang' >&2; exit 2; }
+		LANG_CODE="${!lj}"
+	fi
+done
+case "$LANG_CODE" in en|fr) ;; *) echo 'Use --lang en or --lang fr' >&2; exit 2 ;; esac
+export FTORTURE_LANG="$LANG_CODE"
+# shellcheck source=locale.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/locale.sh"
 
 usage() {
-	cat <<EOF
+	local text
+	if [ "$LANG_CODE" = en ]; then
+		cat <<'EN_HELP'
+usage: torture                         interactive menu
+       torture libft  [directory] [options]
+       torture printf [directory] [options]
+       torture gnl    [directory] [options]
+       torture [directory] [options]    (project detected)
+
+  -s, --speculative   count speculative ▲ failures
+  -v, --verbose       show details of every failure
+  -f, --func LIST     filter functions or BUFFER_SIZE values
+  -p, --part N        test only part N (1, 2 or 3)
+      --no-checks     skip Makefile, norm, prototype and symbol checks
+      --no-norm       skip norminette
+      --seed N        random seed (default: 42)
+      --timeout S     per-test timeout in seconds (default: 3)
+      --no-color      disable colors
+      --lang en|fr    output language (detected from locale by default)
+  -h, --help
+
+Your function and the reference run in separate processes. Matching crashes
+are accepted; a crash in your function alone is an error. A crash in the
+reference alone is a speculative ▲ warning (counted with -s).
+EN_HELP
+		return
+	fi
+	text="$(cat <<EOF
 usage: torture                         menu interactif
        torture libft  [dossier] [options]
        torture printf [dossier] [options]
@@ -42,6 +85,7 @@ usage: torture                         menu interactif
       --seed N        graine des tests aléatoires (défaut 42)
       --timeout S     timeout par test en secondes (défaut 3)
       --no-color      sans couleurs
+      --lang en|fr  output language (detected from locale by default)
   -h, --help
 
 Tests comparés à la vraie fonction :
@@ -50,6 +94,9 @@ Tests comparés à la vraie fonction :
   ta fonction ok     + la vraie crash   -> ▲ spéculatif (tu protèges, la libc non)
   les deux ok                           -> les résultats doivent être identiques
 EOF
+)"
+	tr_text "$text"
+	builtin printf '%s\n' "$REPLY"
 }
 
 while [ $# -gt 0 ]; do
@@ -66,6 +113,7 @@ while [ $# -gt 0 ]; do
 		--no-color) export NO_COLOR=1 ;;
 		--no-checks) DO_CHECKS=0 ;;
 		--no-norm) DO_NORM=0 ;;
+		--lang) shift ;;
 		-h|--help) usage; exit 0 ;;
 		-*) echo "option inconnue: $1"; usage; exit 2 ;;
 		*) DIR="$1" ;;
@@ -211,7 +259,8 @@ tui_path() {
 		[ -n "$err" ] && printf '   %s✘ %s%s\n\n' "$R" "$err" "$X"
 		printf '   %sTab pour compléter · Entrée pour valider%s\n\n' "$PHD" "$X"
 		printf '\033[?25h'
-		IFS= read -r -e -p "   ${PH}▶${X} chemin : " -i "$def" DIR || exit 0
+		tr_text 'path'; [ "$LANG_CODE" = fr ] && REPLY='chemin'
+		IFS= read -r -e -p "   ${PH}▶${X} $REPLY : " -i "$def" DIR || exit 0
 		printf '\033[?25l'
 		DIR="${DIR/#\~/$HOME}"
 		if [ ! -d "$DIR" ]; then err="dossier introuvable : $DIR"
@@ -286,6 +335,7 @@ set_project "$PROJ"
 [ "$SPEC" = 1 ] && PASS+=("-s")
 [ "$VERBOSE" = 1 ] && PASS+=("-v")
 PASS+=("--seed" "$SEED")
+PASS+=("--lang" "$LANG_CODE")
 [ -n "$NO_COLOR" ] && PASS+=("--no-color")
 [ -n "$FUNC_FILTER" ] && [ "$PROJ" != gnl ] && PASS+=("-f" "$FUNC_FILTER")
 [ -n "$TIMEOUT" ] && PASS+=("--timeout" "$TIMEOUT")
@@ -324,8 +374,8 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 emit()   { local IFS='|'; printf '%s\n' "$*" >> "$CHECKS"; }
-ck()     { emit C "$@"; }
-detail() { emit D "$*"; }
+ck()     { local a; local translated=(); for a in "$@"; do tr_text "$a"; translated+=("$REPLY"); done; emit C "${translated[@]}"; }
+detail() { tr_text "$*"; emit D "$REPLY"; }
 
 # ------------------------------------------------------------------ build --
 # build_proj [rule]   (default: all)
@@ -668,7 +718,10 @@ DO_BONUS=0
 [ "$PART" != 1 ] && [ $HAS_BONUS = 1 ] && DO_BONUS=1
 
 NOTE=()
-[ $HAS_BONUS = 0 ] && [ "$PART" != 1 ] && NOTE=(--note "Bonus non testé : pas de règle bonus dans le Makefile")
+if [ $HAS_BONUS = 0 ] && [ "$PART" != 1 ]; then
+	tr_text 'Bonus non testé : pas de règle bonus dans le Makefile'
+	NOTE=(--note "$REPLY")
+fi
 
 status=0
 if [ $DO_MANDATORY = 1 ]; then

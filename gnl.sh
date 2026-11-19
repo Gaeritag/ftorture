@@ -267,7 +267,8 @@ run_gnl() {
 				passes+=("2 bbs$bs $bs 1 $spec")
 			done
 		else
-			GNL_NOTE=(--note "Bonus non testé : fichiers _bonus absents ou qui ne compilent pas")
+			tr_text 'Bonus non testé : fichiers _bonus absents ou qui ne compilent pas'
+			GNL_NOTE=(--note "$REPLY")
 		fi
 	fi
 	n=${#passes[@]}

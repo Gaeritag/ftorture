@@ -47,10 +47,76 @@ static struct s_opt
 	const char	*note;			/* extra line in the summary box        */
 	int			spec_pass;		/* every failure of this run is a ▲     */
 	int			no_section;		/* chained run: part header already out */
+	int			english;
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL, 0, 0};
+	NULL, 0, 0, 0};
+
+#define L(fr, en) (o.english ? (en) : (fr))
 
 static FILE	*g_log;
+
+/* Translate labels and assertion descriptions only; never rewrite test data. */
+static const char	*localize(const char *src)
+{
+	static char buf[8][2048];
+	static unsigned idx;
+	static const struct { const char *fr, *en; } words[] = {
+		{"une ligne avec", "one line with"},
+		{"une ligne sans", "one line without"},
+		{"un seul", "a single"},
+		{"caractère", "character"},
+		{"lignes vides", "empty lines"},
+		{"lignes variées", "varied lines"},
+		{"ligne longue", "long line"},
+		{"ligne très longue", "very long line"},
+		{"ligne différente", "line differs"},
+		{"dernière ligne", "last line"},
+		{"au milieu", "in the middle"},
+		{"à la fin", "at the end"},
+		{"entrée standard", "standard input"},
+		{"pipe alimenté par petits morceaux", "pipe fed in small pieces"},
+		{"fd invalides", "invalid fds"},
+		{"fd fermé", "closed fd"},
+		{"fd élevé", "high fd"},
+		{"un dossier", "a directory"},
+		{"renvoyé alors qu'il reste des lignes", "returned while lines remain"},
+		{"rappel après la fin du fichier", "call after end of file"},
+		{"reçu", "received"},
+		{"octets", "bytes"}, {"octet", "byte"},
+		{"échoue", "fails"}, {"fuite", "leak"},
+		{"fermés", "closed"}, {"fermé", "closed"},
+		{"fichier", "file"}, {"ligne", "line"},
+		{"après", "after"}, {"sans", "without"},
+		{"avec", "with"}, {"alors que", "while"},
+		{"NULL renvoyé", "NULL returned"},
+		{"alors qu'il reste des lignes", "while lines remain"},
+		{"pas de", "no"}, {"ni de", "or"},
+		{NULL, NULL}
+	};
+	char *out;
+	size_t i, n = 0;
+
+	if (!o.english || !src)
+		return (src);
+	out = buf[(idx++) % 8];
+	while (*src && n + 1 < sizeof(buf[0]))
+	{
+		for (i = 0; words[i].fr; i++)
+			if (!strncmp(src, words[i].fr, strlen(words[i].fr)))
+				break ;
+		if (words[i].fr)
+		{
+			size_t len = strlen(words[i].en);
+			if (n + len >= sizeof(buf[0])) break ;
+			memcpy(out + n, words[i].en, len);
+			n += len;
+			src += strlen(words[i].fr);
+		}
+		else out[n++] = *src++;
+	}
+	out[n] = 0;
+	return (out);
+}
 
 /* ============================================================== colors === */
 #define C_RST  (o.color ? "\033[0m" : "")
@@ -80,6 +146,46 @@ static FILE	*g_log;
 #define g_funcs (g_proj.funcs)
 #define NFUNCS (g_proj.nfuncs)
 #define g_part_names (g_proj.part_names)
+
+static void	localize_project(void)
+{
+	int i;
+
+	if (!o.english)
+		return ;
+	if (!strcmp(g_proj.name, "libft"))
+	{
+		g_part_names[1] = "libc functions";
+		g_part_names[2] = "Additional functions";
+		g_part_names[3] = "Linked lists";
+		g_proj.short_names[2] = "additional";
+		g_proj.short_names[3] = "linked lists";
+	}
+	else if (!strcmp(g_proj.name, "ft_printf"))
+	{
+		g_part_names[1] = "Mandatory · cspdiuxX%";
+		g_part_names[2] = "Bonus · -0. width # +";
+		g_proj.short_names[1] = "mandatory";
+		for (i = 0; i < g_proj.nfuncs; i++)
+		{
+			if (!strcmp(g_funcs[i].name, "pf_mix")) g_funcs[i].label = "mixed";
+			if (!strcmp(g_funcs[i].name, "pf_edge")) g_funcs[i].label = "edge cases";
+			if (!strcmp(g_funcs[i].name, "pf_prec")) g_funcs[i].label = "precision .";
+			if (!strcmp(g_funcs[i].name, "pf_width")) g_funcs[i].label = "width";
+			if (!strcmp(g_funcs[i].name, "pf_combo")) g_funcs[i].label = "combinations";
+			if (!strcmp(g_funcs[i].name, "pf_undef")) g_funcs[i].label = "undefined cases";
+		}
+	}
+	else
+	{
+		g_part_names[1] = "Mandatory · one BUFFER_SIZE per line";
+		g_part_names[2] = "Bonus · multiple fds at once";
+		g_proj.short_names[1] = "mandatory";
+		for (i = 0; i < g_proj.nfuncs; i++)
+			if (!strcmp(g_funcs[i].name, "bsdef"))
+				g_funcs[i].label = "without -D (default)";
+	}
+}
 
 static void	padv(char *out, size_t osz, const char *s, int w);
 
@@ -341,7 +447,7 @@ static void	run_child(const t_test *t, int ref, int fail_at, t_run *r)
 			g_shm->leaks = zm_live_blocks();
 			g_shm->leak_bytes = zm_live_bytes();
 			zft_failf(t->file, t->line,
-				"fuite mémoire : %d bloc(s), %zu octet(s) jamais libéré(s)",
+				L("fuite mémoire : %d bloc(s), %zu octet(s) jamais libéré(s)", "memory leak: %d block(s), %zu byte(s) not freed"),
 				g_shm->leaks, g_shm->leak_bytes);
 		}
 		g_shm->armed_count = g_armed_count;
@@ -364,9 +470,9 @@ static const char	*sig_name(int sig)
 		case SIGSEGV: return ("SIGSEGV · segmentation fault");
 		case SIGBUS: return ("SIGBUS · bus error");
 		case SIGABRT: return ("SIGABRT · abort (double free / corruption ?)");
-		case SIGFPE: return ("SIGFPE · erreur arithmétique");
-		case SIGALRM: return ("TIMEOUT · boucle infinie ?");
-		case SIGILL: return ("SIGILL · instruction illégale");
+		case SIGFPE: return (L("SIGFPE · erreur arithmétique", "SIGFPE · arithmetic error"));
+		case SIGALRM: return (L("TIMEOUT · boucle infinie ?", "TIMEOUT · infinite loop?"));
+		case SIGILL: return (L("SIGILL · instruction illégale", "SIGILL · illegal instruction"));
 	}
 	snprintf(b, sizeof(b), "signal %d", sig);
 	return (b);
@@ -425,17 +531,17 @@ static void	detail_kv(t_sb *b, const char *k, const char *v, const char *col)
 
 static void	detail_shm(t_sb *b, const t_shm *s, int with_values)
 {
-	detail_kv(b, "entrée", s->input, "");
+	detail_kv(b, L("entrée", "input"), localize(s->input), "");
 	if (s->failed)
 	{
 		if (s->exp[0] || s->got[0])
 		{
-			detail_kv(b, "expr", s->msg, C_DIM);
-			detail_kv(b, "attendu", s->exp, C_GRN);
-			detail_kv(b, "obtenu", s->got, C_RED);
+			detail_kv(b, "expr", localize(s->msg), C_DIM);
+			detail_kv(b, L("attendu", "expected"), s->exp, C_GRN);
+			detail_kv(b, L("obtenu", "actual"), s->got, C_RED);
 		}
 		else
-			detail_kv(b, "erreur", s->msg, "");
+			detail_kv(b, L("erreur", "error"), localize(s->msg), "");
 	}
 	(void)with_values;
 }
@@ -448,13 +554,13 @@ static char	*make_detail(const t_test *t, int idx, t_res res, const char *head,
 	const char	*mark = res == R_SPEC ? "▲" : "✘";
 
 	sb_add(&b, "      %s%s #%d%s %s« %s »%s  %s%s:%d%s\n", col, mark, idx, C_RST,
-		C_B, t->name, C_RST, C_GRY, base_name(t->file), t->line, C_RST);
+		C_B, localize(t->name), C_RST, C_GRY, base_name(t->file), t->line, C_RST);
 	if (head && *head)
 		sb_add(&b, "        %s%s%s\n", col, head, C_RST);
 	if (s)
 		detail_shm(&b, s, 1);
-	detail_kv(&b, "attendu", exp, C_GRN);
-	detail_kv(&b, "obtenu", got, C_RED);
+	detail_kv(&b, L("attendu", "expected"), exp, C_GRN);
+	detail_kv(&b, L("obtenu", "actual"), got, C_RED);
 	return (b.s);
 }
 
@@ -486,7 +592,7 @@ static void	eval_normal(const t_test *t, int idx, t_result *r)
 		r->res = bad;
 		set_glyph(r, "E");
 		r->detail = make_detail(t, idx, bad,
-				"le processus s'est arrêté (exit() appelé ?)", &a.s, NULL, NULL);
+				L("le processus s'est arrêté (exit() appelé ?)", "process stopped (exit() called?)"), &a.s, NULL, NULL);
 	}
 	else
 	{
@@ -518,7 +624,7 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 		r->res = R_FAIL;
 		set_glyph(r, "T");
 		r->detail = make_detail(t, idx, R_FAIL, sig_name(a.sig), &a.s,
-				rc ? "(l'originale crash)" : b.s.out, NULL);
+				rc ? L("(l'originale crash)", "(reference crashes)") : b.s.out, NULL);
 	}
 	else if (fc && rc)
 	{
@@ -528,30 +634,35 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 	else if (fc)
 	{
 		snprintf(head, sizeof(head),
-			"ta fonction crash (%s) alors que l'originale ne crash pas",
+			L("ta fonction crash (%s) alors que l'originale ne crash pas", "your function crashes (%s), but the reference does not"),
 			sig_name(a.sig));
 		r->res = R_FAIL;
 		set_glyph(r, "S");
 		r->detail = make_detail(t, idx, R_FAIL, head, &a.s,
-				b.s.out[0] ? b.s.out : "(pas de crash)", "CRASH");
+				b.s.out[0] ? b.s.out : L("(pas de crash)", "(no crash)"), "CRASH");
 	}
 	else if (rc)
 	{
 		snprintf(head, sizeof(head),
-			"l'originale crash (%s) mais pas la tienne : protection non "
-			"demandée par le sujet", sig_name(b.sig));
+			L("l'originale crash (%s) mais pas la tienne : protection non "
+			"demandée par le sujet",
+			"reference crashes (%s), but yours does not: protection "
+			"not required by the subject"), sig_name(b.sig));
 		r->res = R_SPEC;
 		set_glyph(r, "▲");
 		r->detail = make_detail(t, idx, R_SPEC, head, &a.s, "CRASH",
-				a.s.out[0] ? a.s.out : "(pas de crash)");
+				a.s.out[0] ? a.s.out : L("(pas de crash)", "(no crash)"));
 	}
 	else if (strcmp(a.s.out, b.s.out) != 0)
 	{
 		r->res = t->spec ? R_SPEC : R_FAIL;
 		set_glyph(r, t->spec ? "▲" : "✘");
 		r->detail = make_detail(t, idx, r->res,
-				t->spec ? "résultat différent de l'originale (comportement "
-				"indéfini, spéculatif)" : "résultat différent de l'originale",
+				t->spec ? L("résultat différent de l'originale (comportement "
+				"indéfini, spéculatif)",
+				"result differs from reference (undefined behavior, speculative)")
+				: L("résultat différent de l'originale",
+				"result differs from the reference"),
 				&a.s, b.s.out, a.s.out);
 	}
 	else
@@ -580,11 +691,11 @@ static void	eval_malloc(const t_test *t, int idx, t_result *r)
 		{
 			if (a.sig)
 				snprintf(head, sizeof(head),
-					"crash (%s) quand le malloc n°%d/%d renvoie NULL",
+					L("crash (%s) quand le malloc n°%d/%d renvoie NULL", "crash (%s) when malloc #%d/%d returns NULL"),
 					sig_name(a.sig), k, n);
 			else
 				snprintf(head, sizeof(head),
-					"quand le malloc n°%d/%d renvoie NULL :", k, n);
+					L("quand le malloc n°%d/%d renvoie NULL :", "when malloc #%d/%d returns NULL:"), k, n);
 			r->res = R_FAIL;
 			set_glyph(r, a.s.leaks ? "L" : "M");
 			r->detail = make_detail(t, idx, R_FAIL, head, &a.s, NULL, NULL);
@@ -731,21 +842,24 @@ static void	banner(void)
 		pixel_row(row, sizeof(row), "FTORTURE", i, scan[i], 22);
 		printf("   %s\n", row);
 	}
-	printf("   %s▚▚ %s ▞▞%s\n", C_PHM, g_proj.subtitle, C_RST);
-	printf("   %s%s%s%s_%s\n\n", C_PH, g_proj.tagline, C_RST,
+	printf("   %s▚▚ %s ▞▞%s\n", C_PHM, L(g_proj.subtitle, "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE"), C_RST);
+	printf("   %s%s%s%s_%s\n\n", C_PH, L(g_proj.tagline, "> your code will talk"), C_RST,
 		o.color ? "\033[5m\033[38;5;46m" : "", C_RST);
-	printf("   %sprojet%s %s · %s\n", C_PHD, C_RST, g_proj.name, o.path);
+	printf("   %s%s%s %s · %s\n", C_PHD, L("projet", "project"), C_RST, g_proj.name, o.path);
 	printf("   %smode  %s %s\n", C_PHD, C_RST, o.spec
-		? "strict (-s) : les ▲ comptent comme erreurs"
-		: "normal : ▲ = avertissements (-s pour les compter)");
+		? L("strict (-s) : les ▲ comptent comme erreurs", "strict (-s): ▲ count as errors")
+		: L("normal : ▲ = avertissements (-s pour les compter)", "normal: ▲ are warnings (-s to count them)"));
 	printf("   %sseed  %s %u\n", C_PHD, C_RST, o.seed);
 }
 
 static void	legend(void)
 {
-	printf("\n   %sLégende%s  %s✔%s ok   %s✔%s crash identique à la libc   "
+	printf(L("\n   %sLégende%s  %s✔%s ok   %s✔%s crash identique à la libc   "
 		"%s✘%s erreur   %sS%s crash\n            %sT%s timeout   %sL%s fuite   "
 		"%sM%s malloc protégé   %s▲%s spéculatif\n",
+		"\n   %sLegend%s  %s✔%s ok   %s✔%s same crash as libc   "
+		"%s✘%s error   %sS%s crash\n            %sT%s timeout   %sL%s leak   "
+		"%sM%s malloc protection   %s▲%s speculative\n"),
 		C_GRY, C_RST, C_GRN, C_RST, C_CYN, C_RST, C_RED, C_RST, C_RED, C_RST,
 		C_RED, C_RST, C_RED, C_RST, C_GRN, C_RST, C_YEL, C_RST);
 }
@@ -878,19 +992,21 @@ static void	print_checks(void)
 			status_mark(st, &mk, &col);
 			sb_add(&protos, "   %s%s%s %s%s%s\n", col, mk, C_RST, C_B, name,
 				C_RST);
-			sb_add(&protos, "       %sattendu%s %s%s%s\n", C_GRY, C_RST,
+			sb_add(&protos, L("       %sattendu%s %s%s%s\n", "       %sexpected%s %s%s%s\n"), C_GRY, C_RST,
 				C_GRN, exp, C_RST);
-			sb_add(&protos, "       %strouvé %s %s%s%s\n", C_GRY, C_RST,
-				col, *found ? found : "(non déclaré dans le header)", C_RST);
+			sb_add(&protos, L("       %strouvé %s %s%s%s\n",
+				"       %sfound %s %s%s%s\n"), C_GRY, C_RST,
+				col, *found ? found : L("(non déclaré dans le header)", "(not declared in header)"), C_RST);
 			if (g_log)
-				fprintf(g_log, "[PROTO %s] %s\n   attendu: %s\n   trouvé : %s\n",
+				fprintf(g_log, L("[PROTO %s] %s\n   attendu: %s\n   trouvé : %s\n",
+					"[PROTO %s] %s\n   expected: %s\n   found: %s\n"),
 					st, name, exp, found);
 		}
 		else if (!strcmp(kind, "PS"))
 		{
 			int	bad = g_ck.proto_tot - g_ck.proto_ok;
 
-			printf("   %s%s%s %-24s %s%d/%d conformes%s\n",
+			printf(L("   %s%s%s %-24s %s%d/%d conformes%s\n", "   %s%s%s %-24s %s%d/%d matching%s\n"),
 				bad ? C_RED : C_GRN, bad ? "✘" : "✔", C_RST, "Prototypes",
 				bad ? C_RED : C_GRY, g_ck.proto_ok, g_ck.proto_tot, C_RST);
 			if (bad)
@@ -981,10 +1097,11 @@ static void	run_function(int fi, int *ti)
 	if (!f->addr)
 	{
 		fs->missing = 1;
-		printf("%s✘ ABSENTE de %s%s %s(%d tests ignorés)%s\n", C_BGR,
+		printf(L("%s✘ ABSENTE de %s%s %s(%d tests ignorés)%s\n", "%s✘ MISSING from %s%s %s(%d tests skipped)%s\n"), C_BGR,
 			g_proj.archive, C_RST, C_GRY, fs->total, C_RST);
 		if (g_log)
-			fprintf(g_log, "\n%s : ABSENTE\n", f->label ? f->label : f->name);
+			fprintf(g_log, L("\n%s : ABSENTE\n", "\n%s : MISSING\n"),
+				f->label ? f->label : f->name);
 		return ;
 	}
 	fflush(stdout);
@@ -1035,7 +1152,8 @@ static void	run_function(int fi, int *ti)
 		printf("\n");
 	}
 	if (g_log)
-		fprintf(g_log, "\n%s : %d/%d (%d spéculatif)\n",
+		fprintf(g_log, L("\n%s : %d/%d (%d spéculatif)\n",
+			"\n%s : %d/%d (%d speculative)\n"),
 			f->label ? f->label : f->name, fs->pass,
 			fs->total, fs->spec);
 	for (i = 0; i < end - start; i++)
@@ -1068,9 +1186,10 @@ static void	run_function(int fi, int *ti)
 			if (res[i].res == R_FAIL || res[i].res == R_SPEC)
 				hidden++;
 		if (hidden > shown)
-			printf("      %s… %d autre(s) détail(s) : relance avec -v ou "
-				"regarde %s%s\n", C_GRY, hidden - shown,
-				o.log ? o.log : "le log", C_RST);
+			printf(L("      %s… %d autre(s) détail(s) : relance avec -v ou "
+				"regarde %s%s\n", "      %s… %d more details: rerun with -v or "
+				"see %s%s\n"), C_GRY, hidden - shown,
+				o.log ? o.log : L("le log", "the log"), C_RST);
 	}
 	free(res);
 }
@@ -1147,7 +1266,7 @@ static int	summary(void)
 	g_inner = term_width() - 6;
 	if (g_inner > 76)
 		g_inner = 76;
-	printf("\n   %s█▀▀▀%s RÉSULTAT %s", C_PHM, C_INV, C_RST);
+	printf("\n   %s█▀▀▀%s %s %s", C_PHM, C_INV, L("RÉSULTAT", "RESULT"), C_RST);
 	printf("%s", C_PHM);
 	rep("▀", g_inner - 13);
 	printf("█%s\n", C_RST);
@@ -1202,7 +1321,7 @@ static int	summary(void)
 		C_GRN, tp, C_RST, tf ? C_RED : C_PHD, tf, C_RST, ts ? C_YEL : C_PHD, ts,
 		C_RST, C_PHD, tt, C_RST);
 	if (tce)
-		box_line("%s       dont %d crash identique(s) à la libc (acceptés)%s",
+		box_line(L("%s       dont %d crash identique(s) à la libc (acceptés)%s", "%s       including %d libc-matching crashes (accepted)%s"),
 			C_CYN, tce, C_RST);
 	if (miss)
 		box_line("%sABSENT%s %s%d fonction(s)%s", C_PHD, C_RST, C_RED, miss,
@@ -1223,24 +1342,26 @@ static int	summary(void)
 		box_center("%s", row);
 	}
 	if (!bad)
-		box_center("%s%d/%d fonctions parfaites · aucune erreur%s", C_PH, fok,
+		box_center(L("%s%d/%d fonctions parfaites · aucune erreur%s", "%s%d/%d perfect functions · no errors%s"), C_PH, fok,
 			fall, C_RST);
 	else
-		box_center("%s%d problème(s) · %d/%d fonctions OK%s", C_RED, bad, fok,
+		box_center(L("%s%d problème(s) · %d/%d fonctions OK%s", "%s%d problems · %d/%d functions OK%s"), C_RED, bad, fok,
 			fall, C_RST);
 	if (!o.spec && ts)
-		box_center("%s%d avertissement(s) ▲ à savoir défendre%s", C_YEL, ts,
+		box_center(L("%s%d avertissement(s) ▲ à savoir défendre%s", "%s%d speculative ▲ warnings to review%s"), C_YEL, ts,
 			C_RST);
 	box_line("%s", "");
 	printf("   %s█", C_PHM);
 	rep("▄", g_inner);
 	printf("█%s\n", C_RST);
 	if (o.log)
-		printf("   %sDétails complets : %s%s\n", C_GRY, o.log, C_RST);
+		printf(L("   %sDétails complets : %s%s\n", "   %sFull details: %s%s\n"), C_GRY, o.log, C_RST);
 	printf("\n");
 	if (g_log)
-		fprintf(g_log, "\nTOTAL: %d ok, %d ko, %d spéculatifs, %d absentes, "
-			"%d vérifs KO -> %s\n", tp, tf, ts, miss, g_ck.ko,
+		fprintf(g_log, L("\nTOTAL: %d ok, %d ko, %d spéculatifs, %d absentes, "
+			"%d vérifs KO -> %s\n",
+			"\nTOTAL: %d ok, %d failed, %d speculative, %d missing, "
+			"%d failed checks -> %s\n"), tp, tf, ts, miss, g_ck.ko,
 			bad ? "KO" : "OK");
 	return (bad ? 1 : 0);
 }
@@ -1285,6 +1406,17 @@ static int	run_status(void)
 
 static void	usage(void)
 {
+	if (o.english)
+	{
+		printf("usage: ftorture_tester [options]\n"
+			"  -s, --speculative   count speculative ▲ failures\n"
+			"  -v, --verbose       show all failure details\n"
+			"  -f, --func LIST     filter functions\n"
+			"  -p, --part N        test part N\n"
+			"      --lang en|fr    output language\n"
+			"      --no-color     disable colors\n");
+		return ;
+	}
 	printf("usage: ftorture_tester [options]\n"
 		"  -s, --speculative  les erreurs spéculatives (▲) comptent\n"
 		"  -v, --verbose      affiche tous les détails\n"
@@ -1297,6 +1429,7 @@ static void	usage(void)
 		"      --stats-out FILE, --stats-in FILE (passes chaînées)\n"
 		"      --seed N       graine des tests aléatoires\n"
 		"      --timeout S    timeout par test (défaut 3s)\n"
+		"      --lang en|fr   langue de sortie\n"
 		"      --no-color\n");
 }
 
@@ -1305,7 +1438,12 @@ int	main(int ac, char **av)
 	int	i;
 	int	ti;
 	int	part;
+	const char *locale;
 
+	locale = getenv("LC_ALL");
+	if (!locale || !*locale) locale = getenv("LC_MESSAGES");
+	if (!locale || !*locale) locale = getenv("LANG");
+	o.english = (!locale || strncmp(locale, "fr", 2));
 	for (i = 1; i < ac; i++)
 	{
 		const char	*a = av[i];
@@ -1330,6 +1468,13 @@ int	main(int ac, char **av)
 			o.timeout = atoi(av[++i]);
 		else if (!strcmp(a, "--no-color"))
 			o.color = 0;
+		else if (!strcmp(a, "--lang") && i + 1 < ac)
+		{
+			const char *lang = av[++i];
+			if (strcmp(lang, "en") && strcmp(lang, "fr"))
+				return (fprintf(stderr, "Use --lang en or --lang fr\n"), 2);
+			o.english = !strcmp(lang, "en");
+		}
 		else if (!strcmp(a, "--no-banner"))
 			o.no_banner = 1;
 		else if (!strcmp(a, "--no-summary"))
@@ -1356,6 +1501,7 @@ int	main(int ac, char **av)
 		o.color = 0;
 	if (o.timeout < 1)
 		o.timeout = 3;
+	localize_project();
 	g_shm = mmap(NULL, sizeof(t_shm), PROT_READ | PROT_WRITE,
 			MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (g_shm == MAP_FAILED)
@@ -1385,7 +1531,7 @@ int	main(int ac, char **av)
 			part = g_funcs[i].part;
 			if (any && !o.no_section)
 			{
-				snprintf(title, sizeof(title), "PARTIE %d · %s", part,
+				snprintf(title, sizeof(title), "%s %d · %s", L("PARTIE", "PART"), part,
 					g_part_names[part]);
 				section(title, C_BLU);
 				if (g_log)

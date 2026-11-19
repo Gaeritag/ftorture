@@ -22,12 +22,19 @@ nothing to download, you only need `cc`, `make` and `nm`. Built for **Linux** (4
 ```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
-source ~/.zshrc        # or ~/.bashrc
 ```
 
-`install.sh` adds the **`torture`** command to bash, zsh and fish.
+`install.sh` creates `~/.local/applications/torture.sh` and links it as
+`~/.local/bin/torture`. No shell aliases or configuration changes are needed.
+Ensure `~/.local/bin` is on your `PATH` (restart your shell if necessary).
+The launcher keeps your current directory and passes all arguments through.
+To fast-forward a clean `main` checkout from the **original** repository
+(`https://github.com/HorusExE69/ftorture.git`), run `bash install.sh --update`.
+Updates never overwrite local changes or merge divergent histories.
 
-> The terminal output is in French.
+Terminal output follows your locale (French for `fr_*`, English otherwise).
+Use `--lang en` or `--lang fr` to override it for any run, including the
+interactive menu and the plain-text report.
 
 ## Usage
 
