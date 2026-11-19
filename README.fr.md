@@ -22,10 +22,15 @@ télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes
 ```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
-source ~/.zshrc        # ou ~/.bashrc
 ```
 
-`install.sh` ajoute la commande **`torture`** à bash, zsh et fish.
+`install.sh` crée `~/.local/applications/torture.sh` et le lie à
+`~/.local/bin/torture`. Aucun alias ni changement de configuration du shell.
+Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
+Le lanceur conserve le dossier courant et transmet tous les arguments.
+Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
+(`https://github.com/HorusExE69/ftorture.git`), lance `bash install.sh --update`.
+Les modifications locales et les historiques divergents ne sont pas écrasés.
 
 ## Utilisation
 
