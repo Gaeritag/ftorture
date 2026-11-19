@@ -14,23 +14,27 @@ qu'il fuit et ce qu'il lit en dehors de sa mémoire.
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, largeur, `# +`, ~22 000 appels comparés à `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`, fichiers, stdin, pipe, erreurs de `read`, bonus multi-fd |
 
-Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft), réécrit en C : rien à
-télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes 42).
+Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft) : moteur C et
+orchestration Python modulaire. Dépendances : **Linux**, **Python 3.10+**, `cc`,
+`make` et `nm`. Installation, orchestration et vérifications sont en Python.
+Aucun paquet pip requis ; norminette reste facultative.
 
 ## Installation
 
 ```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
-cd ~/ftorture && bash install.sh
+cd ~/ftorture && python3 install.py
 ```
 
-`install.sh` crée `~/.local/applications/torture.sh` et le lie à
-`~/.local/bin/torture`. Aucun alias ni changement de configuration du shell.
+`install.py` crée directement le lanceur Python exécutable `~/.local/bin/torture`.
+Aucun alias ni changement de configuration du shell. La réinstallation supprime
+les anciens lanceurs de `~/.local/applications` uniquement s'ils appartiennent à ftorture.
 Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
 Le lanceur conserve le dossier courant et transmet tous les arguments.
 Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
-(`https://github.com/HorusExE69/ftorture.git`), lance `bash install.sh --update`.
+(`https://github.com/HorusExE69/ftorture.git`), lance `python3 install.py --update`.
 Les modifications locales et les historiques divergents ne sont pas écrasés.
+Supprime tout ancien alias `torture` restant dans ta configuration shell.
 
 ## Utilisation
 
@@ -43,14 +47,9 @@ La langue suit la locale (`fr_*` : français, sinon anglais). Utilise
 torture
 ```
 
-Le logo reste en haut de chaque écran :
-
-1. **projet** : `LIBFT`, `FT_PRINTF` ou `GNL` (`↑ ↓` ou `1` `2` `3`, Entrée). Si le
-   dossier courant contient un `libft.h`, un `ft_printf.h` ou un `get_next_line.h`, il
-   est présélectionné.
-2. **chemin** du projet (Tab pour compléter).
-3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette,
-   puis `▶ LANCER LA TORTURE`.
+Le menu Python demande le numéro du projet puis son dossier. Le projet du dossier
+courant est sélectionné par défaut. Entrée accepte le choix proposé, `q` quitte.
+Les options de test se passent en ligne de commande.
 
 ### En ligne de commande
 
@@ -76,11 +75,42 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `--seed N` | graine du fuzzing (42 par défaut) |
 | `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl) |
 | `--no-color` | sans couleurs |
+| `--lang en\|fr` | choisir la langue de sortie |
+| `--list-projects` | lister les projets et versions de sujet |
+
+Sans installation : `python3 /chemin/ftorture/torture.py …`, ou
+`python3 -m ftorture …` depuis le dépôt. Les chemins avec espaces sont acceptés.
 
 À la fin, ftorture lance le `make clean` de ton projet (libft, ft_printf), même après
 une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
+
+### Architecture Python et ajout de projets
+
+Python gère les arguments, la détection, les compilations, les passes obligatoires
+et bonus, les appels du moteur C, les codes de retour et le nettoyage. Le moteur C
+et ses tests restent inchangés. Les vérifications natives de `ftorture/subject/`
+produisent `build/<projet>/checks.txt`. Les diagnostics du compilateur et des outils
+sont dans `build/<projet>/checks/`. Un verrou protège les artefacts et rapports
+contre les exécutions concurrentes.
+L'analyse des includes est heuristique : aucun verdict sur un en-tête non résolu.
+Vérifie manuellement les cas impliquant des macros complexes ou la compilation conditionnelle.
+
+Ajoute un module dans `ftorture/projects/`, implémente `Project` (`validate`,
+`checks`, `run`, `cleanup`), puis enregistre `PROJECT` dans
+`ftorture/projects/__init__.py`. La CLI et le menu utilisent ce registre.
+`ArchiveProject` fournit la stratégie Makefile/archive ; `GnlProject` illustre la
+compilation directe des sources. Les nouveaux projets doivent écrire leurs
+vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. Voir le
+[skill de création de testeurs](skills/ftorture-new-testers/SKILL.md).
+
+`ftorture/runtime.py` centralise les sous-processus, options et chemins ;
+`ftorture/ui.py` et `i18n.py` gèrent le menu et la langue. Validation :
+`python3 -m unittest discover -s tests -v`. Les tests utilisent des projets
+temporaires mais écrasent `build/` et `ftorture.log`. Codes de retour : `0` succès,
+`1` tests/vérifications en échec, `2` erreur du lanceur ou de compilation,
+`130` interruption. Un bonus ignoré n'est jamais présenté comme validé.
 
 ## Vérifications (libft et ft_printf)
 
