@@ -6,7 +6,6 @@ and overwrite `ftorture.log`.
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q ftorture tests examples install.py torture.py
-bash -n torture.sh install.sh
 git diff --check
 ```
 
@@ -40,5 +39,7 @@ TOTAL: 252 ok, 0 ko, 25 spéculatifs, 0 absentes, 0 vérifs KO -> OK
 This compares **behavior**, not every historical shell heuristic: subject checks
 are deliberately disabled for this comparison and covered separately by native
 check regression tests. Current skill guides describe the Python interfaces, not
-the old internal shell helpers. The remaining shell entry points are thin
-compatibility wrappers.
+the old internal shell helpers. No shell entry points are shipped: normal usage
+goes through the Python launcher installed at `~/.local/bin/torture`. Direct
+Python entry points remain internal development/test interfaces. Bash is used
+only when explicitly comparing the historical revision above.

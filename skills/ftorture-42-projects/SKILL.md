@@ -10,14 +10,14 @@ Use this skill to run ftorture, not to modify its test framework. The Python CLI
 ## Discover and prepare
 
 ```bash
-python3 /path/to/ftorture/torture.py --list-projects
-python3 /path/to/ftorture/torture.py --help
+torture --list-projects
+torture --help
 ```
 
 - Current modules support **libft v19.3**, **ft_printf v12.1**, and **get_next_line v14.3**. Verify the student's actual subject before interpreting a mismatch. The registry in `ftorture/projects/__init__.py` is authoritative for this checkout.
 - User suites are discovered from `${XDG_CONFIG_HOME:-$HOME/.config}/ftorture/tests/*.json` or `--custom-tests-dir DIR` and listed as `custom-<key>` / `[CUSTOM]`. They are user-owned commands, not official subject checks; only run trusted manifests. See `docs/custom-tests.md`. They require no C tools unless their own commands do.
 - Requirements: Linux, Python 3.10+, a C compiler, and the project's build tools (`make`/`nm` for archive projects; `nm` for GNL). Norminette is optional. There are no Python package dependencies.
-- Install with `python3 install.py`, then use `torture`. The installer writes a Python launcher directly to `~/.local/bin/torture`, detects the running shell and checks its startup file. If PATH setup is missing it shows instructions and asks before editing; declining or non-interactive installation never edits shell configuration. Without installation, use the absolute `torture.py` path, or `python3 -m ftorture` from the checkout. No aliases, shell entry points, network access, or root permissions are needed for tests.
+- Install with `python3 install.py`, then use the installed `torture` command from any directory. The installer writes a Python launcher directly to `~/.local/bin/torture`, detects the running shell and checks its startup file. If PATH setup is missing it shows instructions and asks before editing; declining or non-interactive installation never edits shell configuration. Keep the checkout in place for the launcher's Python code and C suites. No aliases, shell wrappers, network access, or root permissions are needed for tests; direct Python entry points are development/test interfaces, not the normal user workflow.
 - Confirm the student directory and expected header. libft/printf require a Makefile; GNL is compiled from sources. Inspect the student's working tree: archive builds/checks run `make fclean`, `all`/`bonus`, and `clean`, replacing archives and removing objects. Ask first if existing artifacts must be preserved. Do not change student source unless explicitly asked.
 
 ## Run and narrow failures

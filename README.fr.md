@@ -42,8 +42,8 @@ Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
 Les modifications locales et les historiques divergents ne sont pas écrasés.
 Supprime tout ancien alias `torture` restant dans ta configuration shell.
 
-Pour désinstaller la commande : `python3 install.py --delete --confirm` (ou
-`bash install.sh --delete --confirm`). Les deux options sont obligatoires. Seuls
+Pour désinstaller la commande : `python3 install.py --delete --confirm`.
+Les deux options sont obligatoires. Seuls
 le lanceur géré `~/.local/bin/torture` et sa cible historique gérée sont supprimés.
 Les fichiers étrangers sont refusés ; le PATH, les autres commandes, le dépôt et
 les tests personnalisés sont conservés. La commande peut être répétée sans risque.
@@ -100,10 +100,10 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `--list-projects` | lister les projets et versions de sujet |
 | `--custom-tests-dir DIR` | remplacer le dossier par défaut des tests personnalisés |
 
-Sans installation : `python3 /chemin/ftorture/torture.py …`, ou
-`python3 -m ftorture …` depuis le dépôt. Les chemins avec espaces sont acceptés.
-`bash torture.sh …` et `bash install.sh [--update]` restent disponibles comme
-lanceurs de compatibilité ; toute la logique est en Python.
+Après installation, utilise `torture` depuis ton projet ou tout autre dossier ;
+inutile de le lancer depuis le dépôt ftorture. Les chemins avec espaces sont acceptés.
+Le lanceur est uniquement en Python ; aucun wrapper shell n'est fourni.
+Conserve le dépôt : le lanceur installé y charge le code Python et les tests C.
 
 À la fin, ftorture lance le `make clean` de ton projet (libft, ft_printf), même après
 une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
@@ -120,7 +120,7 @@ parties, délais, codes de sortie attendus, avertissements spéculatifs et rappo
 N'exécute que des suites fiables : elles disposent de tes permissions, sans sandbox.
 
 ```bash
-python3 torture.py --custom-tests-dir examples/custom-tests custom-readme /chemin/projet -v
+torture --custom-tests-dir ~/ftorture/examples/custom-tests custom-readme /chemin/projet -v
 ```
 
 Le [guide des tests personnalisés](docs/custom-tests.md) décrit le format, un

@@ -42,8 +42,8 @@ To fast-forward a clean `main` checkout from the **original** repository
 Updates never overwrite local changes or merge divergent histories.
 Remove any old `torture` alias from your shell configuration if one still exists.
 
-To uninstall the command, run `python3 install.py --delete --confirm` (or
-`bash install.sh --delete --confirm`). Both flags are required. Only the managed
+To uninstall the command, run `python3 install.py --delete --confirm`.
+Both flags are required. Only the managed
 `~/.local/bin/torture` launcher and its managed legacy symlink target are removed.
 Unrelated files are refused; PATH entries, other commands, the checkout and custom
 tests are kept. Repeating the command is safe.
@@ -102,10 +102,10 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 | `--list-projects` | list supported project modules and subject versions |
 | `--custom-tests-dir DIR` | use user test manifests from this directory instead of the default config location |
 
-Without installing, run `python3 /path/to/ftorture/torture.py …` or, from the
-checkout, `python3 -m ftorture …`. Paths containing spaces are supported.
-The old `bash torture.sh …` and `bash install.sh [--update]` commands remain as
-thin compatibility launchers; they delegate all functionality to Python.
+After installation, use `torture` from your project directory or any other folder;
+you do not need to start it from the ftorture checkout. Paths containing spaces
+are supported. The launcher is Python-only; no shell wrappers are provided.
+Keep the checkout in place: the installed launcher loads its Python code and C suites.
 
 At the end, ftorture runs your project's `make clean` (libft, ft_printf), even after an
 error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
@@ -122,7 +122,7 @@ expected exit codes, speculative verdicts, and logs. Only run trusted suites:
 commands execute with your permissions and are not sandboxed.
 
 ```bash
-python3 torture.py --custom-tests-dir examples/custom-tests custom-readme /path/to/project -v
+torture --custom-tests-dir ~/ftorture/examples/custom-tests custom-readme /path/to/project -v
 ```
 
 See the [custom-test guide](docs/custom-tests.md) for the schema, example, and

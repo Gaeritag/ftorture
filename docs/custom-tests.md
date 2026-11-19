@@ -7,12 +7,13 @@ any number of entries; number shortcuts work for the first nine.
 
 ## Quick start
 
-Try the included, read-only example without installing anything:
+After `python3 install.py`, try the included, read-only example using the installed
+command from any directory (adjust `~/ftorture` to your checkout's location):
 
 ```bash
-python3 torture.py --custom-tests-dir examples/custom-tests --list-projects
-python3 torture.py --custom-tests-dir examples/custom-tests custom-readme /path/to/project -v
-python3 torture.py --custom-tests-dir examples/custom-tests
+torture --custom-tests-dir ~/ftorture/examples/custom-tests --list-projects
+torture --custom-tests-dir ~/ftorture/examples/custom-tests custom-readme /path/to/project -v
+torture --custom-tests-dir ~/ftorture/examples/custom-tests
 ```
 
 To make your tests available by default, copy `examples/custom-tests/readme.json`

@@ -25,6 +25,19 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    def test_python_only_installed_command_works_outside_checkout(self):
+        self.assertFalse((ROOT / "torture.sh").exists())
+        self.assertFalse((ROOT / "install.sh").exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target = installer.install(ROOT, home)
+            elsewhere = home / "another directory"
+            elsewhere.mkdir()
+            result = subprocess.run([str(target), "--help"], cwd=elsewhere,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("usage: torture", result.stdout)
+
     def test_uninstall_is_confirmed_idempotent_and_preserves_shell_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
