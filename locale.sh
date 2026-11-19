@@ -9,6 +9,8 @@ tr_text() {
 		[ -n "$from" ] && REPLY="${REPLY//"$from"/"$to"}"
 	done <<'WORDS'
 menu interactif|interactive menu
+ignore les fichiers et dossiers cachés|ignore hidden files and folders
+ignorer les fichiers cachés|ignore hidden files
 fichier caché|hidden file
 binaire / objet compilé|binary / compiled object
 fichier temporaire d'éditeur|temporary editor file
@@ -18,7 +20,6 @@ fichier inattendu|unexpected file
 fichier(s) à ne pas rendre|file(s) not to submit
 #include inutile(s)|unused #include(s)
 #include servent tous|#include directives are used
-aucun|none
 aucun #include|no #include directives
 rien de cette lib n'est utilisé|nothing from this library is used
 aucune fonction, struct, macro ou lib de ce header n'est utilisée|no function, struct, macro or library from this header is used
@@ -204,6 +205,7 @@ compilation du moteur|compiling engine
 compilation de contrôle|checking compilation
 Bonus non testé|Bonus not tested
 aucun BUFFER_SIZE sélectionné|no BUFFER_SIZE selected
+aucun|none
 WORDS
 	case "$REPLY" in
 		'les '*'#include directives are used')

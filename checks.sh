@@ -33,9 +33,20 @@ why_extra() {
 	esac
 }
 
+# hidden_prune   find arguments skipping .git, and every hidden file or
+#                folder when --no-hidden is given (IGNORE_HIDDEN=1)
+hidden_prune() {
+	if [ "${IGNORE_HIDDEN:-0}" = 1 ]; then
+		printf '%s\0' -name '.?*' -prune -o
+	else
+		printf '%s\0' -name .git -prune -o
+	fi
+}
+
 # check_files   needs DIR, PROJ; run it before any build (after fclean)
 check_files() {
-	local f bad=() n=0
+	local f bad=() n=0 prune=()
+	mapfile -d '' prune < <(hidden_prune)
 	while IFS= read -r -d '' f; do
 		f="${f#./}"
 		if [ -d "$DIR/$f" ]; then
@@ -46,7 +57,7 @@ check_files() {
 			continue
 		fi
 		allowed_path "$PROJ" "$f" || bad+=("$f ($(why_extra "$f"))")
-	done < <(cd "$DIR" && find . -mindepth 1 -name .git -prune -o -print0)
+	done < <(cd "$DIR" && find . -mindepth 1 "${prune[@]}" -print0)
 	n=${#bad[@]}
 	if [ "$n" -eq 0 ]; then
 		ck OK "Fichiers en trop" "aucun"
@@ -223,14 +234,15 @@ inc_users() {
 
 # check_includes   needs DIR, CC_BIN, BUILD
 check_includes() {
-	local f kind name r label why n=0 tot=0 bad=() seen tok
+	local f kind name r label why n=0 tot=0 bad=() seen tok prune=()
 	INC_TMP="$BUILD/includes"
 	rm -rf -- "$INC_TMP"
 	mkdir -p "$INC_TMP"
 	INC_FILES=()
+	mapfile -d '' prune < <(hidden_prune)
 	while IFS= read -r -d '' f; do
 		INC_FILES+=("${f#./}")
-	done < <(cd "$DIR" && find . -name .git -prune -o -type f \( -name '*.c' -o -name '*.h' \) -print0 | sort -z)
+	done < <(cd "$DIR" && find . -mindepth 1 "${prune[@]}" -type f \( -name '*.c' -o -name '*.h' \) -print0 | sort -z)
 	for f in "${INC_FILES[@]}"; do
 		inc_tokens "$DIR/$f" > "$INC_TMP/tok_${f//\//_}"
 	done

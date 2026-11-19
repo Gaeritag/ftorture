@@ -49,7 +49,7 @@ Le logo reste en haut de chaque écran :
    dossier courant contient un `libft.h`, un `ft_printf.h` ou un `get_next_line.h`, il
    est présélectionné.
 2. **chemin** du projet (Tab pour compléter).
-3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette,
+3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette, ignorer les fichiers cachés,
    puis `▶ LANCER LA TORTURE`.
 
 ### En ligne de commande
@@ -73,6 +73,7 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
+| `--no-hidden` | ignore les fichiers et dossiers cachés (`.vscode`, `.DS_Store`…) dans les vérifs des fichiers en trop et des `#include` |
 | `--seed N` | graine du fuzzing (42 par défaut) |
 | `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl) |
 | `--no-color` | sans couleurs |

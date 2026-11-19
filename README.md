@@ -50,7 +50,7 @@ The logo stays at the top of every screen:
    current folder contains a `libft.h`, a `ft_printf.h` or a `get_next_line.h`, it is
    preselected.
 2. **path** to the project (Tab completes).
-3. **options** to tick (Space): strict mode, verbose, checks, norminette, then
+3. **options** to tick (Space): strict mode, verbose, checks, norminette, ignore hidden files, then
    `▶ LANCER LA TORTURE`.
 
 ### Command line
@@ -74,6 +74,7 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
+| `--no-hidden` | ignore hidden files and folders (`.vscode`, `.DS_Store`…) in the extra-files and `#include` checks |
 | `--seed N` | fuzzing seed (default 42) |
 | `--timeout S` | per-test timeout (default 3 s, 10 s for gnl) |
 | `--no-color` | no colors |

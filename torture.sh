@@ -16,6 +16,7 @@ DIR=""
 PASS=()
 DO_CHECKS=1
 DO_NORM=1
+IGNORE_HIDDEN=0
 SPEC=0
 VERBOSE=0
 SEED=42
@@ -56,6 +57,7 @@ usage: torture                         interactive menu
   -p, --part N        test only part N (1, 2 or 3)
       --no-checks     skip Makefile, norm, prototype and symbol checks
       --no-norm       skip norminette
+      --no-hidden     ignore hidden files and folders (.vscode, .DS_Store…)
       --seed N        random seed (default: 42)
       --timeout S     per-test timeout in seconds (default: 3)
       --no-color      disable colors
@@ -82,6 +84,7 @@ usage: torture                         menu interactif
   -p, --part N        libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus)
       --no-checks     saute les vérifications (Makefile, norme, protos, nm…)
       --no-norm       saute norminette
+      --no-hidden     ignore les fichiers et dossiers cachés (.vscode, .DS_Store…)
       --seed N        graine des tests aléatoires (défaut 42)
       --timeout S     timeout par test en secondes (défaut 3)
       --no-color      sans couleurs
@@ -113,6 +116,7 @@ while [ $# -gt 0 ]; do
 		--no-color) export NO_COLOR=1 ;;
 		--no-checks) DO_CHECKS=0 ;;
 		--no-norm) DO_NORM=0 ;;
+		--no-hidden) IGNORE_HIDDEN=1 ;;
 		--lang) shift ;;
 		-h|--help) usage; exit 0 ;;
 		-*) echo "option inconnue: $1"; usage; exit 2 ;;
@@ -273,17 +277,18 @@ tui_path() {
 }
 
 tui_options() {
-	local sel=4 k
+	local sel=5 k
 	local labels=("mode strict (-s) : les ▲ comptent comme erreurs"
 		"verbose (-v) : tous les détails des échecs"
 		"vérifications (Makefile, nm, prototypes, README…)"
-		"norminette")
-	local vals=("$SPEC" "$VERBOSE" "$DO_CHECKS" "$DO_NORM")
+		"norminette"
+		"ignorer les fichiers cachés (--no-hidden)")
+	local vals=("$SPEC" "$VERBOSE" "$DO_CHECKS" "$DO_NORM" "$IGNORE_HIDDEN")
 	while true; do
 		cls
 		header_art
 		printf '   %sOPTIONS%s  %s%s · %s%s\n\n' "$B$PH" "$X" "$PHD" "$PROJ_LABEL" "$DIR" "$X"
-		for i in 0 1 2 3; do
+		for i in 0 1 2 3 4; do
 			local box="[ ]"
 			[ "${vals[$i]}" = 1 ] && box="[■]"
 			if [ $i = $sel ]; then
@@ -293,7 +298,7 @@ tui_options() {
 			fi
 		done
 		echo
-		if [ $sel = 4 ]; then
+		if [ $sel = 5 ]; then
 			printf '   %s ▶ LANCER LA TORTURE %s\n' "$INV" "$X"
 		else
 			printf '     %s▶ LANCER LA TORTURE%s\n' "$PHM" "$X"
@@ -301,16 +306,17 @@ tui_options() {
 		printf '\n   %s↑ ↓ naviguer · Espace cocher · Entrée lancer · q quitter%s\n' "$PHD" "$X"
 		k="$(read_key)"
 		case "$k" in
-			up) sel=$(((sel + 4) % 5)) ;;
-			down) sel=$(((sel + 1) % 5)) ;;
-			space) [ $sel -lt 4 ] && vals[$sel]=$((1 - vals[$sel])) ;;
+			up) sel=$(((sel + 5) % 6)) ;;
+			down) sel=$(((sel + 1) % 6)) ;;
+			space) [ $sel -lt 5 ] && vals[$sel]=$((1 - vals[$sel])) ;;
 			enter)
-				if [ $sel -lt 4 ]; then vals[$sel]=$((1 - vals[$sel]))
+				if [ $sel -lt 5 ]; then vals[$sel]=$((1 - vals[$sel]))
 				else break; fi ;;
 			quit) cls; exit 0 ;;
 		esac
 	done
 	SPEC="${vals[0]}"; VERBOSE="${vals[1]}"; DO_CHECKS="${vals[2]}"; DO_NORM="${vals[3]}"
+	IGNORE_HIDDEN="${vals[4]}"
 }
 
 if [ "$NARGS" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
