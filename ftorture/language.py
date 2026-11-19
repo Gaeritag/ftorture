@@ -1,4 +1,4 @@
-"""Language selection; whole messages, never substitutions in user data."""
+"""English/French language selection; never substitute text in user data."""
 import os
 
 

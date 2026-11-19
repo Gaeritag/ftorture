@@ -158,7 +158,7 @@ ftorture/projects/       project registry and build/test strategies
 ftorture/projects/custom.py  user manifest loading and command-suite strategy
 ftorture/checks.py        check records and compiler/tool probes
 ftorture/subject/        native file, Makefile, include, symbol and prototype checks
-ftorture/ui.py, i18n.py   menu and language selection
+ftorture/ui.py, language.py  menu and English/French language selection
 src/                     existing C engine, helpers, and test suites
 ```
 

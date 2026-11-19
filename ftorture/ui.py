@@ -10,7 +10,7 @@ import sys
 import termios
 import tty
 
-from .i18n import text
+from .language import text
 from .registry import Registry
 from .runtime import Options
 

@@ -8,7 +8,7 @@ import signal
 import subprocess
 import sys
 
-from .i18n import text
+from .language import text
 
 
 class RunnerError(Exception):

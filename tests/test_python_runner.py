@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from ftorture.cli import execute, run_lock
 from ftorture.checks import CheckReport
-from ftorture.i18n import default_language
+from ftorture.language import default_language
 from ftorture.projects import detect, find
 from ftorture.projects.gnl import PROJECT as GNL
 from ftorture.runtime import Context, Options, RunnerError

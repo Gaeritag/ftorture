@@ -149,7 +149,7 @@ vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. V
 [skill de création de testeurs](skills/ftorture-new-testers/SKILL.md).
 
 `ftorture/runtime.py` centralise les sous-processus, options et chemins ;
-`ftorture/ui.py` et `i18n.py` gèrent le menu et la langue. Validation :
+`ftorture/ui.py` et `language.py` gèrent le menu et la langue. Validation :
 `python3 -m unittest discover -s tests -v`. Les tests utilisent des projets
 temporaires mais écrasent `build/` et `ftorture.log`. Codes de retour : `0` succès,
 `1` tests/vérifications en échec, `2` erreur du lanceur ou de compilation,

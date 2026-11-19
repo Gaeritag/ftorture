@@ -19,6 +19,7 @@ Use this skill when changing **ftorture**, not a student's submission. Installat
 | `ftorture/projects/archive.py` | Makefile/archive building and linking; compare `libft.py`/`printf.py` |
 | `ftorture/projects/gnl.py` | Example source-only strategy with multiple compiled test passes |
 | `ftorture/runtime.py` | `Options`, `Context`, subprocess cancellation, paths, compiler flags and C-engine arguments |
+| `ftorture/language.py` | English/French selection from locale and complete-message selection |
 | `ftorture/checks.py` | `CheckSession` probes/localized messages and delimiter-safe `CheckReport` records |
 | `ftorture/subject/` | Native file, README, norm, include-use, symbol, prototype and project-specific checks |
 | `install.py` | Managed launcher, safe update, confirmed `--delete --confirm` uninstall, shell detection and consent-based PATH configuration |

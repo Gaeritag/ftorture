@@ -8,7 +8,7 @@ import shutil
 import signal
 import sys
 
-from .i18n import default_language, text
+from .language import default_language, text
 from .registry import load_registry
 from .projects.base import Project
 from .runtime import Context, Options, RunnerError
