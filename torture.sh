@@ -681,11 +681,19 @@ link_tester() {
 # -------------------------------------------------------- get_next_line --
 . "$FT_DIR/gnl.sh"
 if [ "$PROJ" = gnl ]; then
+	if [ "${FTORTURE_CHECKS_ONLY:-}" = 1 ]; then
+		run_checks_gnl
+		exit 0
+	fi
 	run_gnl
 	exit $?
 fi
 
 # ------------------------------------------------------------------- main --
+if [ "${FTORTURE_CHECKS_ONLY:-}" = 1 ]; then
+	run_checks
+	exit 0
+fi
 if [ $DO_CHECKS -eq 1 ]; then
 	run_checks
 else
