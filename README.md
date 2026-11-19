@@ -25,8 +25,9 @@ cd ~/ftorture && bash install.sh
 ```
 
 `install.sh` creates `~/.local/applications/torture.sh` and links it as
-`~/.local/bin/torture`. No shell aliases or configuration changes are needed.
-Ensure `~/.local/bin` is on your `PATH` (restart your shell if necessary).
+`~/.local/bin/torture`. It also adds `~/.local/bin` to your `PATH` in `~/.zshrc`,
+`~/.bashrc` and fish's `config.fish` (once, only where it is not set yet), so the
+command works on every machine: open a new terminal after the first install.
 The launcher keeps your current directory and passes all arguments through.
 To fast-forward a clean `main` checkout from the **original** repository
 (`https://github.com/HorusExE69/ftorture.git`), run `bash install.sh --update`.

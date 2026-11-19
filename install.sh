@@ -38,7 +38,46 @@ printf '#!/usr/bin/env bash\n# ftorture managed launcher\nexec bash %q "$@"\n' "
 chmod +x "$APP"
 ln -sfn "$APP" "$BIN"
 echo "Installed $BIN -> $APP"
-if ! command -v torture >/dev/null 2>&1; then
-	echo 'If torture is not found, add ~/.local/bin to your PATH (then restart your shell).'
+
+# ~/.local/bin is only on PATH where something else put it (Ubuntu's
+# ~/.profile when the folder existed at login, another tool...). Add it to
+# the shell startup files, once, so `torture` is found everywhere.
+MARK='# ftorture: ~/.local/bin on PATH'
+LINE='export PATH="$HOME/.local/bin:$PATH"'
+user_shell="${SHELL##*/}"
+has_path_line() {
+	[ -f "$1" ] && grep -Eq '^[^#]*(\$HOME|\$\{HOME\}|~)/\.local/bin' "$1"
+}
+added=0
+for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+	name="${rc##*/.}"
+	name="${name%rc}"
+	# create the file only for the user's own shell
+	[ -f "$rc" ] || [ "$name" = "$user_shell" ] || continue
+	if has_path_line "$rc"; then
+		echo "PATH: already set in $rc"
+		continue
+	fi
+	printf '\n%s\n%s\n' "$MARK" "$LINE" >> "$rc"
+	echo "PATH: ~/.local/bin added to $rc"
+	added=1
+done
+FC="$HOME/.config/fish/config.fish"
+if command -v fish >/dev/null 2>&1 || [ -f "$FC" ]; then
+	if [ -f "$FC" ] && grep -Eq '^[^#]*(\$HOME|~)/\.local/bin' "$FC"; then
+		echo "PATH: already set in $FC"
+	else
+		mkdir -p "${FC%/*}"
+		printf '\n%s\nfish_add_path -g $HOME/.local/bin\n' "$MARK" >> "$FC"
+		echo "PATH: ~/.local/bin added to $FC"
+		added=1
+	fi
+fi
+case ":$PATH:" in
+	*":$HOME/.local/bin:"*) ;;
+	*) added=1 ;;
+esac
+if [ "$added" = 1 ]; then
+	echo 'Open a new terminal (or run: source ~/.zshrc / source ~/.bashrc), then run: torture'
 fi
 echo 'To update from the original repository, run: bash install.sh --update'
