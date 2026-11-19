@@ -24,8 +24,9 @@ git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
 ```
 
-`install.sh` crée `~/.local/applications/torture.sh` et le lie à
-`~/.local/bin/torture`. Aucun alias ni changement de configuration du shell.
+`install.sh` crée directement le lanceur exécutable `~/.local/bin/torture`.
+Aucun alias ni changement de configuration du shell. La réinstallation supprime
+l'ancien `~/.local/applications/torture.sh` uniquement s'il appartient à ftorture.
 Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
 Le lanceur conserve le dossier courant et transmet tous les arguments.
 Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**

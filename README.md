@@ -24,8 +24,9 @@ git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && bash install.sh
 ```
 
-`install.sh` creates `~/.local/applications/torture.sh` and links it as
-`~/.local/bin/torture`. No shell aliases or configuration changes are needed.
+`install.sh` creates the executable launcher `~/.local/bin/torture` directly.
+No shell aliases or configuration changes are needed. Reinstalling removes
+the old `~/.local/applications/torture.sh` only if it is ftorture-managed.
 Ensure `~/.local/bin` is on your `PATH` (restart your shell if necessary).
 The launcher keeps your current directory and passes all arguments through.
 To fast-forward a clean `main` checkout from the **original** repository

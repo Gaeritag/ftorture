@@ -23,21 +23,25 @@ elif [ "$#" -ne 0 ]; then
 	exit 2
 fi
 
-mkdir -p "${APP%/*}" "${BIN%/*}"
+mkdir -p "${BIN%/*}"
 if [ -e "$BIN" ] || [ -L "$BIN" ]; then
-	if [ ! -L "$BIN" ] || [ "$(readlink "$BIN")" != "$APP" ]; then
+	if { [ -L "$BIN" ] && [ "$(readlink "$BIN")" != "$APP" ]; } ||
+		{ [ ! -L "$BIN" ] && ! grep -qx '# ftorture managed launcher' "$BIN"; }; then
 		echo "Refusing to replace an existing command: $BIN" >&2
 		exit 1
 	fi
 fi
-if [ -e "$APP" ] && ! grep -qx '# ftorture managed launcher' "$APP"; then
-	echo "Refusing to replace an existing file: $APP" >&2
-	exit 1
+# Replace the old symlink itself, never write through it into applications/.
+TEMP="$(mktemp "${BIN}.XXXXXX")"
+trap 'rm -f "$TEMP"' EXIT
+printf '#!/usr/bin/env bash\n# ftorture managed launcher\nexec bash %q "$@"\n' "$DIR/torture.sh" > "$TEMP"
+chmod +x "$TEMP"
+mv -f "$TEMP" "$BIN"
+# Migrate only our old managed file; preserve unrelated files and symlinks.
+if [ -f "$APP" ] && [ ! -L "$APP" ] && grep -qx '# ftorture managed launcher' "$APP"; then
+	rm -f "$APP"
 fi
-printf '#!/usr/bin/env bash\n# ftorture managed launcher\nexec bash %q "$@"\n' "$DIR/torture.sh" > "$APP"
-chmod +x "$APP"
-ln -sfn "$APP" "$BIN"
-echo "Installed $BIN -> $APP"
+echo "Installed $BIN"
 if ! command -v torture >/dev/null 2>&1; then
 	echo 'If torture is not found, add ~/.local/bin to your PATH (then restart your shell).'
 fi
