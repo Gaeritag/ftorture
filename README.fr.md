@@ -154,6 +154,8 @@ vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. V
 temporaires mais écrasent `build/` et `ftorture.log`. Codes de retour : `0` succès,
 `1` tests/vérifications en échec, `2` erreur du lanceur ou de compilation,
 `130` interruption. Un bonus ignoré n'est jamais présenté comme validé.
+Voir aussi le [guide de validation](docs/validation.md) pour comparer les versions
+Bash et Python sur des copies temporaires d'un vrai projet libft.
 
 ## Vérifications (libft et ft_printf)
 

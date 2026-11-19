@@ -66,4 +66,10 @@ python3 -m ftorture --list-projects
 python3 torture.py <key> /path/to/known-good-project --no-norm
 ```
 
+For migration parity use `python3 tests/compare_legacy_libft.py /path/to/libft`.
+It compares legacy Bash and Python behavior on independent temporary copies,
+including all 43 function summaries; do not run it concurrently with integration
+tests. See `docs/validation.md` for the reference revision, observed results, and
+the distinction between behavioral parity and native subject-check validation.
+
 Add native-check regressions in `tests/test_subject_checks.py` and real-engine integration coverage in `tests/test_python_runner.py`, or focused new test modules. Use temporary student fixtures. Cover known-good and broken behavior, wrong/missing symbols/prototypes, build errors, complete/partial bonus support, filters/parts, speculative mode, repeatable seeds, language, spaces in paths, and interruption cleanup. Run full mandatory/bonus suites as well as focused tests. Tests overwrite shared checkout artifacts/reports; run serially. Update both READMEs with the subject version, commands and limitations. Never weaken an oracle to accommodate one student's code.

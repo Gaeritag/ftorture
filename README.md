@@ -163,11 +163,13 @@ src/                     existing C engine, helpers, and test suites
 ```
 
 Validate changes with `python3 -m unittest discover -s tests -v`. The tests use
-temporary student fixtures; integration cases compile and run the real C engine
-and pseudo-terminal tests exercise menu navigation, completion, and restoration,
-and overwrite the checkout's `build/` files and `ftorture.log`. Exit codes: `0`
+temporary student fixtures. Integration cases compile/run the real C engine and
+overwrite the checkout's `build/` files and `ftorture.log`; pseudo-terminal tests
+exercise menu navigation, completion, and restoration. Exit codes: `0`
 for passing selected tests, `1` for failed tests/checks, `2` for runner/build
 errors, `130` for interruption. Skipped bonus tests are never reported as passes.
+See [validation instructions](docs/validation.md) for a safe legacy-Bash/Python
+comparison using temporary copies of a real libft project.
 
 ## Checks (libft and ft_printf)
 
