@@ -5,7 +5,7 @@ description: Design and add reliable ftorture suites for new 42 projects, with s
 
 # Add a tester for another 42 project
 
-Use this skill when extending **ftorture itself**, not when testing a student's project. A new project needs integration throughout the runner; adding a `TEST` macro alone will not make it selectable. First read the exact 42 subject/version and the existing implementations in `torture.sh`, `gnl.sh`, `src/engine.c`, `src/project.h`, `src/zft.h`, and the closest `src/<project>/` directory. Do not assume libft's archive, Makefile, allowed symbols, or reference functions apply to the new subject.
+Use this skill when extending **ftorture itself**, not when testing a student's project. A new project needs integration throughout the runner; adding a `TEST` macro alone will not make it selectable. First read the exact 42 subject/version and the existing implementations in `torture.sh`, `checks.sh`, `gnl.sh`, `src/engine.c`, `src/project.h`, `src/zft.h`, and the closest `src/<project>/` directory. Do not assume libft's archive, Makefile, allowed symbols, or reference functions apply to the new subject.
 
 ## Design and integration
 

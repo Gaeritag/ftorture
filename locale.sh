@@ -9,6 +9,22 @@ tr_text() {
 		[ -n "$from" ] && REPLY="${REPLY//"$from"/"$to"}"
 	done <<'WORDS'
 menu interactif|interactive menu
+fichier caché|hidden file
+binaire / objet compilé|binary / compiled object
+fichier temporaire d'éditeur|temporary editor file
+extension .|unexpected extension .
+ inattendue|
+fichier inattendu|unexpected file
+fichier(s) à ne pas rendre|file(s) not to submit
+#include inutile(s)|unused #include(s)
+#include servent tous|#include directives are used
+aucun|none
+aucun #include|no #include directives
+rien de cette lib n'est utilisé|nothing from this library is used
+aucune fonction, struct, macro ou lib de ce header n'est utilisée|no function, struct, macro or library from this header is used
+déjà fourni par un autre include|already provided by another include
+seulement|only
+autre(s)|other
 liste de BUFFER_SIZE|BUFFER_SIZE list
 ex.|e.g.
 LISTE|LIST
@@ -189,6 +205,11 @@ compilation de contrôle|checking compilation
 Bonus non testé|Bonus not tested
 aucun BUFFER_SIZE sélectionné|no BUFFER_SIZE selected
 WORDS
+	case "$REPLY" in
+		'les '*'#include directives are used')
+			REPLY="${REPLY#les }"
+			REPLY="${REPLY/ directives are used/ directives used}" ;;
+	esac
 }
 
 # printf is also used for compiler-generated source: preserve its format and
