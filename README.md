@@ -14,27 +14,23 @@ and what it reads outside its memory.
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, width, `# +`, ~22,000 calls compared with `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`s, files, stdin, pipe, `read` errors, multi-fd bonus |
 
-Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft): a C test engine
-with modular Python orchestration. Requires **Linux**, **Python 3.10+**, `cc`,
-`make`, and `nm`. Installation, orchestration, and subject checks use Python only.
-No pip packages are needed; norminette is optional.
+Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft), rewritten in C:
+nothing to download, you only need `cc`, `make` and `nm`. Built for **Linux** (42 machines).
 
 ## Installation
 
 ```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
-cd ~/ftorture && python3 install.py
+cd ~/ftorture && bash install.sh
 ```
 
-`install.py` creates the executable Python launcher `~/.local/bin/torture` directly.
-No shell aliases or configuration changes are needed. Reinstalling removes
-old launchers in `~/.local/applications` only if they are ftorture-managed.
+`install.sh` creates `~/.local/applications/torture.sh` and links it as
+`~/.local/bin/torture`. No shell aliases or configuration changes are needed.
 Ensure `~/.local/bin` is on your `PATH` (restart your shell if necessary).
 The launcher keeps your current directory and passes all arguments through.
 To fast-forward a clean `main` checkout from the **original** repository
-(`https://github.com/HorusExE69/ftorture.git`), run `python3 install.py --update`.
+(`https://github.com/HorusExE69/ftorture.git`), run `bash install.sh --update`.
 Updates never overwrite local changes or merge divergent histories.
-Remove any old `torture` alias from your shell configuration if one still exists.
 
 Terminal output follows your locale (French for `fr_*`, English otherwise).
 Use `--lang en` or `--lang fr` to override it for any run, including the
@@ -48,9 +44,14 @@ interactive menu and the plain-text report.
 torture
 ```
 
-The Python menu asks for a project number and its directory; the current project's
-header determines the default selection. Enter accepts the default, `q` quits.
-Pass test options on the command line.
+The logo stays at the top of every screen:
+
+1. **project**: `LIBFT`, `FT_PRINTF` or `GNL` (`↑ ↓` or `1` `2` `3`, Enter). If the
+   current folder contains a `libft.h`, a `ft_printf.h` or a `get_next_line.h`, it is
+   preselected.
+2. **path** to the project (Tab completes).
+3. **options** to tick (Space): strict mode, verbose, checks, norminette, then
+   `▶ LANCER LA TORTURE`.
 
 ### Command line
 
@@ -76,51 +77,11 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 | `--seed N` | fuzzing seed (default 42) |
 | `--timeout S` | per-test timeout (default 3 s, 10 s for gnl) |
 | `--no-color` | no colors |
-| `--lang en\|fr` | override the detected output language |
-| `--list-projects` | list supported project modules and subject versions |
-
-Without installing, run `python3 /path/to/ftorture/torture.py …` or, from the
-checkout, `python3 -m ftorture …`. Paths containing spaces are supported.
 
 At the end, ftorture runs your project's `make clean` (libft, ft_printf), even after an
 error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
 ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
-
-### Python architecture and contributor interface
-
-The Python runner owns argument validation, project detection, compilation,
-mandatory/bonus passes, C tester invocation, exit statuses, and cleanup. The
-existing C engine and tests are unchanged. Native subject checks in
-`ftorture/subject/` produce `build/<project>/checks.txt`; compiler and tool probe
-diagnostics are saved in `build/<project>/checks/`. Runs lock the checkout to
-prevent concurrent executions from corrupting build files and reports.
-Include-use analysis is heuristic: unresolved headers get no verdict. Review
-findings involving complex macros or conditional compilation against the subject.
-
-Add a project module under `ftorture/projects/`, implement the `Project` interface
-(`validate`, `checks`, `run`, `cleanup`), and register its `PROJECT` in
-`ftorture/projects/__init__.py`. The CLI/menu discover it from that registry.
-Use `ArchiveProject` for Makefile archives or implement a source build strategy
-like `GnlProject`. Reuse the native checks in `ftorture/subject/` with policies
-appropriate to the new subject; `CheckReport` in `ftorture/checks.py` writes engine check
-records without hand-building delimiters. See [the tester authoring skill](skills/ftorture-new-testers/SKILL.md).
-
-```text
-ftorture/cli.py           CLI, validation, lock, lifecycle
-ftorture/runtime.py       options, subprocesses, artifacts, C-engine interface
-ftorture/projects/       project registry and build/test strategies
-ftorture/checks.py        check records and compiler/tool probes
-ftorture/subject/        native file, Makefile, include, symbol and prototype checks
-ftorture/ui.py, i18n.py   menu and language selection
-src/                     existing C engine, helpers, and test suites
-```
-
-Validate changes with `python3 -m unittest discover -s tests -v`. The tests use
-temporary student fixtures; integration cases compile and run the real C engine
-and overwrite the checkout's `build/` files and `ftorture.log`. Exit codes: `0`
-for passing selected tests, `1` for failed tests/checks, `2` for runner/build
-errors, `130` for interruption. Skipped bonus tests are never reported as passes.
 
 ## Checks (libft and ft_printf)
 

@@ -830,7 +830,8 @@ static void	log_plain(const char *s)
 
 static void	banner(void)
 {
-	/* Pixel "FTORTURE", phosphor green with scanlines. */
+	/* pixel "FTORTURE", phosphor green with scanlines. Same art as in
+	   torture.sh (which prints it before the checks).                      */
 	static const int	scan[] = {46, 40, 46, 40, 46, 22};
 	char				row[1024];
 	int					i;
