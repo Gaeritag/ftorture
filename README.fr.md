@@ -27,9 +27,13 @@ cd ~/ftorture && python3 install.py
 ```
 
 `install.py` crée directement le lanceur Python exécutable `~/.local/bin/torture`.
-Aucun alias. L'installateur ajoute `~/.local/bin` au PATH des fichiers de démarrage
-bash/zsh existants (ou crée celui du shell courant), et de fish si nécessaire,
-sans dupliquer les entrées existantes. La réinstallation supprime
+Aucun alias. Tu dois ajouter `~/.local/bin` au PATH. L'installateur détecte le shell
+actuel (ou utilise `$SHELL`) et vérifie sa configuration : `.zshrc` pour zsh
+(`$ZDOTDIR` respecté), `.bashrc` pour bash, `config.fish` pour fish
+(`$XDG_CONFIG_HOME` respecté), `.profile` pour sh/dash/ksh. Si l'entrée manque, il
+affiche la ligne puis **demande ton autorisation** avant de l'ajouter. Un refus ou
+une installation non interactive ne modifie rien : ajoute alors la ligne toi-même.
+Les entrées existantes ne sont pas dupliquées. La réinstallation supprime
 les anciens lanceurs de `~/.local/applications` uniquement s'ils appartiennent à ftorture.
 Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
 Le lanceur conserve le dossier courant et transmet tous les arguments.

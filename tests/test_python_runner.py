@@ -30,24 +30,61 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp)
             (home / ".bashrc").write_text("# my settings\n")
             (home / ".zshrc").write_text('export PATH="${HOME}/.local/bin:$PATH"\n')
-            with patch.dict(os.environ, {"SHELL": "/bin/bash"}), patch.object(installer.shutil, "which", return_value=None):
+            with patch.object(installer, "detect_shell", return_value="bash"), \
+                    patch("sys.stdin.isatty", return_value=True), patch("builtins.input", return_value="yes") as ask:
                 installer.configure_path(home)
                 installer.configure_path(home)
+            ask.assert_called_once()
             content = (home / ".bashrc").read_text()
             self.assertTrue(content.startswith("# my settings\n"))
             self.assertEqual(content.count(installer.PATH_MARKER), 1)
             self.assertNotIn(installer.PATH_MARKER, (home / ".zshrc").read_text())
             self.assertFalse((home / ".config/fish/config.fish").exists())
 
-    def test_path_setup_creates_current_shell_and_supports_fish(self):
+    def test_path_setup_only_edits_current_shell(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            with patch.dict(os.environ, {"SHELL": "/bin/zsh"}), patch.object(installer.shutil, "which", return_value="/usr/bin/fish"):
+            with patch.dict(os.environ, {"ZDOTDIR": str(home)}), \
+                    patch.object(installer, "detect_shell", return_value="zsh"), \
+                    patch("sys.stdin.isatty", return_value=True), patch("builtins.input", return_value="y"):
                 installer.configure_path(home)
                 installer.configure_path(home)
             self.assertTrue((home / ".zshrc").exists())
             self.assertFalse((home / ".bashrc").exists())
-            self.assertEqual((home / ".config/fish/config.fish").read_text().count("fish_add_path"), 1)
+            self.assertFalse((home / ".config/fish/config.fish").exists())
+
+    def test_path_setup_decline_and_noninteractive_never_edit(self):
+        for interactive in (False, True):
+            with self.subTest(interactive=interactive), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp)
+                with patch.object(installer, "detect_shell", return_value="bash"), \
+                        patch("sys.stdin.isatty", return_value=interactive), patch("builtins.input", return_value="n") as ask:
+                    installer.configure_path(home)
+                self.assertFalse((home / ".bashrc").exists())
+                self.assertEqual(ask.call_count, int(interactive))
+
+    def test_existing_path_is_detected_without_prompt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".bashrc").write_text('export PATH="${HOME}/.local/bin:$PATH"\n')
+            with patch.object(installer, "detect_shell", return_value="bash"), patch("builtins.input") as ask:
+                installer.configure_path(home)
+            ask.assert_not_called()
+            self.assertFalse(installer.path_configured('# export PATH="$HOME/.local/bin:$PATH"', home))
+            self.assertFalse(installer.path_configured('echo "$HOME/.local/bin"', home))
+
+    def test_shell_detection_prefers_running_shell_and_falls_back(self):
+        with patch.object(installer.Path, "read_text", return_value="zsh\n"), patch.dict(os.environ, {"SHELL": "/bin/bash"}):
+            self.assertEqual(installer.detect_shell(), "zsh")
+        with patch.object(installer.Path, "read_text", side_effect=OSError), patch.dict(os.environ, {"SHELL": "/bin/fish"}):
+            self.assertEqual(installer.detect_shell(), "fish")
+
+    def test_alternate_shell_configuration_paths(self):
+        home = Path("/example/home")
+        with patch.dict(os.environ, {"ZDOTDIR": "/custom/zsh", "XDG_CONFIG_HOME": "/custom/config"}):
+            self.assertEqual(installer.shell_configuration(home, "zsh")[0], Path("/custom/zsh/.zshrc"))
+            self.assertEqual(installer.shell_configuration(home, "fish")[0], Path("/custom/config/fish/config.fish"))
+        self.assertIsNone(installer.shell_configuration(home, "unknown"))
 
     def test_migrate_reinstall_and_launch(self):
         with tempfile.TemporaryDirectory(prefix="ftorture home '") as tmp:

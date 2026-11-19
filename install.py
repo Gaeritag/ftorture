@@ -17,24 +17,76 @@ MARKER = "# ftorture managed launcher"
 PATH_MARKER = "# ftorture: ~/.local/bin on PATH"
 
 
+def detect_shell() -> str:
+    """Prefer the running ancestor shell over the configured login shell."""
+    pid = os.getppid()
+    for _ in range(32):
+        try:
+            process = Path(f"/proc/{pid}")
+            name = (process / "comm").read_text().strip().lstrip("-")
+            if name in {"bash", "zsh", "fish", "sh", "dash", "ksh"}:
+                return name
+            status = (process / "status").read_text()
+            parent = re.search(r"^PPid:\s*(\d+)", status, re.M)
+            if parent is None or int(parent[1]) <= 1:
+                break
+            pid = int(parent[1])
+        except OSError:
+            break
+    return Path(os.environ.get("SHELL", "")).name
+
+
+def shell_configuration(home: Path, shell: str) -> tuple[Path, str] | None:
+    if shell == "zsh":
+        return Path(os.environ.get("ZDOTDIR") or home) / ".zshrc", 'export PATH="$HOME/.local/bin:$PATH"'
+    if shell == "bash":
+        return home / ".bashrc", 'export PATH="$HOME/.local/bin:$PATH"'
+    if shell == "fish":
+        config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+        return config / "fish/config.fish", "fish_add_path -g $HOME/.local/bin"
+    if shell in {"sh", "dash", "ksh"}:
+        return home / ".profile", 'export PATH="$HOME/.local/bin:$PATH"'
+    return None
+
+
+def path_configured(content: str, home: Path) -> bool:
+    directory = r"(?:\$HOME|\$\{HOME\}|~|" + re.escape(str(home)) + r")/\.local/bin(?:[/\s\"':;]|$)"
+    for line in content.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if re.search(directory, line) and re.search(r"(?:\bPATH\s*=|\bfish_add_path\b|\bset\s+.*\b(?:PATH|fish_user_paths)\b)", line):
+            return True
+    return False
+
+
 def configure_path(home: Path) -> None:
-    """Append a PATH entry once, preserving existing shell configuration."""
-    shell = Path(os.environ.get("SHELL", "")).name
-    configurations = [(home / ".bashrc", 'export PATH="$HOME/.local/bin:$PATH"', shell == "bash"),
-                      (home / ".zshrc", 'export PATH="$HOME/.local/bin:$PATH"', shell == "zsh")]
-    fish = home / ".config/fish/config.fish"
-    configurations.append((fish, "fish_add_path -g $HOME/.local/bin", bool(shutil.which("fish"))))
-    for path, line, create in configurations:
-        if not path.exists() and not create:
-            continue
-        content = path.read_text() if path.exists() else ""
-        if any(re.search(r"(?:\$HOME|\$\{HOME\}|~)/\.local/bin", existing)
-               for existing in content.splitlines() if not existing.lstrip().startswith("#")):
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a") as output:
-            output.write(f"\n{PATH_MARKER}\n{line}\n")
-        print(f"PATH: ~/.local/bin added to {path}")
+    """Explain PATH setup and request permission before editing one shell config."""
+    print("To use torture, you need ~/.local/bin on your PATH.")
+    shell = detect_shell()
+    configuration = shell_configuration(home, shell)
+    if configuration is None:
+        print("Could not identify a supported shell. Add ~/.local/bin to PATH in your shell startup file.")
+        return
+    path, line = configuration
+    print(f"Detected shell: {shell}; checking {path}")
+    content = path.read_text() if path.exists() else ""
+    if path_configured(content, home):
+        print(f"PATH: already configured in {path}; no changes needed.")
+        return
+    print(f"Add this line to {path}:\n  {line}")
+    if not sys.stdin.isatty():
+        print("Non-interactive installation: shell configuration was not changed.")
+        return
+    try:
+        answer = input(f"May I add this line to {path} for you? [y/N] ").strip().lower()
+    except EOFError:
+        answer = ""
+    if answer not in {"y", "yes"}:
+        print("Shell configuration was not changed. Please add the line yourself.")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as output:
+        output.write(f"\n{PATH_MARKER}\n{line}\n")
+    print(f"PATH: added to {path}. Open a new terminal or reload that file.")
 
 
 def managed(path: Path) -> bool:
