@@ -34,6 +34,9 @@ Les modifications locales et les historiques divergents ne sont pas écrasés.
 
 ## Utilisation
 
+La langue suit la locale (`fr_*` : français, sinon anglais). Utilise
+`--lang fr` ou `--lang en` pour choisir la langue du menu, des tests et du rapport.
+
 ### Menu interactif
 
 ```bash

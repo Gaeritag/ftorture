@@ -75,10 +75,12 @@ static const char	*bs_str(void)
 static void	show(char *dst, size_t dsz, const char *s, size_t n)
 {
 	char	esc[900];
+	const char *lang = getenv("FTORTURE_LANG");
 
 	zft_esc(esc, sizeof(esc), s, n > 200 ? 200 : n);
-	snprintf(dst, dsz, "\"%s%s\" (%zu octet%s)", esc, n > 200 ? "…" : "", n,
-		n > 1 ? "s" : "");
+	snprintf(dst, dsz, lang && !strcmp(lang, "en")
+		? "\"%s%s\" (%zu byte%s)" : "\"%s%s\" (%zu octet%s)",
+		esc, n > 200 ? "…" : "", n, n > 1 ? "s" : "");
 }
 
 int	gnl_step(const char *file, int line, t_gnl *g)

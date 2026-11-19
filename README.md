@@ -32,7 +32,9 @@ To fast-forward a clean `main` checkout from the **original** repository
 (`https://github.com/HorusExE69/ftorture.git`), run `bash install.sh --update`.
 Updates never overwrite local changes or merge divergent histories.
 
-> The terminal output is in French.
+Terminal output follows your locale (French for `fr_*`, English otherwise).
+Use `--lang en` or `--lang fr` to override it for any run, including the
+interactive menu and the plain-text report.
 
 ## Usage
 
