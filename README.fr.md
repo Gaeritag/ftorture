@@ -79,8 +79,8 @@ dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans coul
 | Bloc | Détail |
 |---|---|
 | **Makefile** | règles `$(NAME) all clean fclean re` (+ `bonus` pour printf), `cc`, `-Wall -Wextra -Werror` sur chaque fichier (lu avec `make -nB`, même avec des `@`), `ar` et pas libtool, pas de `-std=c99`, **relink** (y compris `make bonus`), `clean` / `fclean` |
-| **Fichiers** | fichiers à rendre, fichiers en trop, `README.md` (1re ligne en italique, Description / Instructions / Resources, + explication de l'algorithme pour printf) |
-| **Code** | norminette (si installée), **fonctions externes interdites** (tout sauf `malloc`, `free`, `write`, avec le fichier fautif), **variables globales**, fonctions auxiliaires non `static` (libft), fonctions présentes dans l'archive |
+| **Fichiers** | fichiers à rendre, **fichiers en trop en KO** (fichiers cachés hors `.git` / `.gitignore`, extensions inattendues comme `.py` `.cpp` `.txt` `.o`, dossiers vides), `README.md` (1re ligne en italique, Description / Instructions / Resources, + explication de l'algorithme pour printf) |
+| **Code** | norminette (si installée), **`#include` inutiles** (un `<lib.h>` doit fournir quelque chose d'utilisé, un `"x.h"` du projet une de ses fonctions, structs, macros ou libs ; doublons aussi), **fonctions externes interdites** (tout sauf `malloc`, `free`, `write`, avec le fichier fautif), **variables globales**, fonctions auxiliaires non `static` (libft), fonctions présentes dans l'archive |
 | **Prototypes** | chaque prototype du header comparé par le compilateur au **man Linux** / sujet, `t_list` exacte (libft), header qui compile seul |
 
 ## libft

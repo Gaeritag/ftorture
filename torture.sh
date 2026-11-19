@@ -89,6 +89,8 @@ step() { [ -t 1 ] && printf '%s   %s▶%s %s%s…%s' "$CL" "$PH" "$X" "$PHM" "$*
 cls() { [ -t 1 ] && printf '\033[H\033[2J\033[3J'; }
 # shellcheck source=header.sh
 . "$FT_DIR/header.sh"
+# shellcheck source=checks.sh
+. "$FT_DIR/checks.sh"
 
 # ------------------------------------------------------------- projects --
 detect_project() {
@@ -348,25 +350,14 @@ run_checks() {
 	emit S "STRUCTURE & MAKEFILE"
 
 	# files
-	local extra=() sub=()
 	"${MK[@]}" fclean >/dev/null 2>&1
-	while IFS= read -r f; do
-		case "$PROJ:$f" in
-			*:Makefile|*:README.md|*:.git|*:.gitignore) ;;
-			libft:libft.h|libft:ft_*.c) ;;
-			printf:*.c|printf:*.h|printf:libft) ;;
-			*) if [ -d "$DIR/$f" ]; then sub+=("$f/"); else extra+=("$f"); fi ;;
-		esac
-	done < <(cd "$DIR" && ls -A)
 	if [ -f "$DIR/$HDR" ]; then
 		[ "$PROJ" = libft ] && ck OK "Fichiers à rendre" "Makefile, libft.h, ft_*.c à la racine" \
 			|| ck OK "Fichiers à rendre" "Makefile, ft_printf.h, *.c, *.h"
 	else
 		ck KO "Fichiers à rendre" "$HDR absent de la racine"
 	fi
-	if [ ${#extra[@]} -gt 0 ] || [ ${#sub[@]} -gt 0 ]; then
-		ck WARN "Fichiers en trop" "${extra[*]} ${sub[*]} (fichiers inutiles à ne pas rendre)"
-	fi
+	check_files
 
 	# rules
 	local missing=()
@@ -491,6 +482,8 @@ run_checks() {
 	else
 		ck SKIP "Norminette" "non installée (pip install norminette)"
 	fi
+
+	check_includes
 
 	# symbols (va_* are compiler builtins: they never appear in nm)
 	local def und ext forb=() allowed=" malloc free write " tolerated=" __stack_chk_fail _GLOBAL_OFFSET_TABLE_ "

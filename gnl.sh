@@ -45,7 +45,7 @@ gnl_readme() {
 }
 
 run_checks_gnl() {
-	local f missing=() nb=0 extra=()
+	local f missing=() nb=0
 
 	emit S "FICHIERS"
 	for f in get_next_line.c get_next_line_utils.c get_next_line.h; do
@@ -61,15 +61,7 @@ run_checks_gnl() {
 		0) ck SKIP "Fichiers bonus" "absents : bonus non testé" ;;
 		*) ck WARN "Fichiers bonus" "$nb/3 fichiers _bonus (il faut les 3)" ;;
 	esac
-	while IFS= read -r f; do
-		case "$f" in
-			get_next_line.c|get_next_line_utils.c|get_next_line.h) ;;
-			get_next_line_bonus.c|get_next_line_bonus.h|get_next_line_utils_bonus.c) ;;
-			README.md|.git|.gitignore) ;;
-			*) [ -d "$DIR/$f" ] && extra+=("$f/") || extra+=("$f") ;;
-		esac
-	done < <(cd "$DIR" && ls -A)
-	[ ${#extra[@]} -gt 0 ] && ck WARN "Fichiers en trop" "${extra[*]} (à ne pas rendre)"
+	check_files
 	gnl_readme
 
 	emit S "COMPILATION"
@@ -117,6 +109,8 @@ run_checks_gnl() {
 	else
 		ck SKIP "Norminette" "non installée (pip install norminette)"
 	fi
+
+	check_includes
 
 	local objs=("$BUILD"/chk42/*.o)
 	[ $HAS_BONUS = 1 ] && objs+=("$BUILD"/chkb/*.o)

@@ -81,8 +81,8 @@ the ftorture folder, never inside your project.
 | Area | Details |
 |---|---|
 | **Makefile** | rules `$(NAME) all clean fclean re` (+ `bonus` for printf), `cc`, `-Wall -Wextra -Werror` on every file (read with `make -nB`, even with `@`), `ar` and not libtool, no `-std=c99`, **relink** (including `make bonus`), `clean` / `fclean` |
-| **Files** | files to submit, extra files, `README.md` (italic first line, Description / Instructions / Resources, + algorithm explanation for printf) |
-| **Code** | norminette (if installed), **forbidden external functions** (anything but `malloc`, `free`, `write`, with the offending file), **global variables**, non-`static` helpers (libft), functions present in the archive |
+| **Files** | files to submit, **extra files are KO** (hidden files except `.git` / `.gitignore`, unexpected extensions such as `.py` `.cpp` `.txt` `.o`, empty folders), `README.md` (italic first line, Description / Instructions / Resources, + algorithm explanation for printf) |
+| **Code** | norminette (if installed), **unused `#include`** (a `<lib.h>` must give something the file uses, a project `"x.h"` one of its functions, structs, macros or libs; duplicates too), **forbidden external functions** (anything but `malloc`, `free`, `write`, with the offending file), **global variables**, non-`static` helpers (libft), functions present in the archive |
 | **Prototypes** | every prototype in the header compared by the compiler against the **Linux man pages** / subject, exact `t_list` (libft), header compiles on its own |
 
 ## libft
