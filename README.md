@@ -42,6 +42,12 @@ To fast-forward a clean `main` checkout from the **original** repository
 Updates never overwrite local changes or merge divergent histories.
 Remove any old `torture` alias from your shell configuration if one still exists.
 
+To uninstall the command, run `python3 install.py --delete --confirm` (or
+`bash install.sh --delete --confirm`). Both flags are required. Only the managed
+`~/.local/bin/torture` launcher and its managed legacy symlink target are removed.
+Unrelated files are refused; PATH entries, other commands, the checkout and custom
+tests are kept. Repeating the command is safe.
+
 Terminal output follows your locale (French for `fr_*`, English otherwise).
 Use `--lang en` or `--lang fr` to override it for any run, including the
 interactive menu and the plain-text report.

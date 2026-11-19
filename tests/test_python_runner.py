@@ -25,6 +25,44 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    def test_uninstall_is_confirmed_idempotent_and_preserves_shell_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target = installer.install(ROOT, home)
+            (home / ".zshrc").write_text('export PATH="$HOME/.local/bin:$PATH"\n')
+            env = {**os.environ, "HOME": tmp}
+            for args in (("--delete",), ("--confirm",), ("--update", "--delete", "--confirm")):
+                result = subprocess.run([sys.executable, str(ROOT / "install.py"), *args], env=env, capture_output=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertTrue(target.exists())
+            for _ in range(2):
+                result = subprocess.run([sys.executable, str(ROOT / "install.py"), "--delete", "--confirm"], env=env, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(target.exists())
+            self.assertIn(".local/bin", (home / ".zshrc").read_text())
+            self.assertTrue(target.parent.is_dir())
+
+    def test_uninstall_legacy_and_refuse_unrelated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target = home / ".local/bin/torture"
+            target.parent.mkdir(parents=True)
+            legacy = home / ".local/applications/torture.sh"
+            legacy.parent.mkdir()
+            legacy.write_text(f"#!/bin/sh\n{installer.MARKER}\n")
+            target.symlink_to(legacy)
+            installer.uninstall(home)
+            self.assertFalse(legacy.exists())
+            target.write_text("unrelated command")
+            with self.assertRaises(RuntimeError):
+                installer.uninstall(home)
+            self.assertEqual(target.read_text(), "unrelated command")
+            target.unlink()
+            target.symlink_to(home / "unrelated-missing")
+            with self.assertRaises(RuntimeError):
+                installer.uninstall(home)
+            self.assertTrue(target.is_symlink())
+
     def test_path_setup_preserves_content_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

@@ -19,7 +19,7 @@ Use this skill when changing **ftorture**, not a student's submission. Installat
 | `ftorture/runtime.py` | `Options`, `Context`, subprocess cancellation, paths, compiler flags and C-engine arguments |
 | `ftorture/checks.py` | `CheckSession` probes/localized messages and delimiter-safe `CheckReport` records |
 | `ftorture/subject/` | Native file, README, norm, include-use, symbol, prototype and project-specific checks |
-| `install.py` | Managed launcher and safe update; shell detection and consent-based PATH configuration |
+| `install.py` | Managed launcher, safe update, confirmed `--delete --confirm` uninstall, shell detection and consent-based PATH configuration |
 | `src/zft.h`, `src/project.h` | C test macros/helpers and suite descriptor contract |
 | `src/engine.c`, `src/memtrack.c` | Forked execution, reference comparison, allocation instrumentation and reports |
 

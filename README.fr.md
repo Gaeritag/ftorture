@@ -42,6 +42,12 @@ Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
 Les modifications locales et les historiques divergents ne sont pas écrasés.
 Supprime tout ancien alias `torture` restant dans ta configuration shell.
 
+Pour désinstaller la commande : `python3 install.py --delete --confirm` (ou
+`bash install.sh --delete --confirm`). Les deux options sont obligatoires. Seuls
+le lanceur géré `~/.local/bin/torture` et sa cible historique gérée sont supprimés.
+Les fichiers étrangers sont refusés ; le PATH, les autres commandes, le dépôt et
+les tests personnalisés sont conservés. La commande peut être répétée sans risque.
+
 ## Utilisation
 
 La langue suit la locale (`fr_*` : français, sinon anglais). Utilise

@@ -33,6 +33,7 @@ torture gnl /path/to/get_next_line -p 1 -f 1,42
 - `-p` selects a part: libft 1–3; printf/GNL 1 mandatory, 2 bonus. Missing bonus support is not a pass. Printf needs a Makefile bonus rule; GNL needs the complete bonus file set.
 - Use `--seed N` to reproduce fuzzing, `--timeout S` for per-C-test timeouts, and `--lang en|fr` to override locale detection. `--no-hidden` ignores hidden files/directories in extra-file and include-use checks. `--no-norm` disables only norminette; `--no-checks` skips all subject checks but still builds/runs tests. A passing unchecked run does not validate the submission structure.
 - Run serially per checkout: a lock protects shared artifacts and the report. Copy relevant logs before another run overwrites them. Installation updates are a separate action (`python3 install.py --update`), not a prerequisite for diagnosing student code.
+- Uninstall only when requested: `python3 install.py --delete --confirm`. Both flags are mandatory. The installer refuses unrelated commands and preserves shell PATH entries, the checkout, and custom tests.
 
 ## Diagnose and report
 

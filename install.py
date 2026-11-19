@@ -146,12 +146,45 @@ def install(root: Path, home: Path) -> Path:
     return target
 
 
+def uninstall(home: Path) -> None:
+    """Remove only our launcher (and its managed legacy symlink target)."""
+    target = home / ".local/bin/torture"
+    previous = None
+    if target.is_symlink():
+        previous = Path(os.readlink(target))
+        if not previous.is_absolute():
+            previous = target.parent / previous
+        previous = previous.absolute()
+        if previous.parent != home / ".local/applications" or not managed(previous):
+            raise RuntimeError(f"Refusing to delete an unrelated command: {target}")
+    elif target.exists():
+        if not managed(target):
+            raise RuntimeError(f"Refusing to delete an unrelated command: {target}")
+    else:
+        print(f"Not installed: {target}")
+        return
+    target.unlink()
+    if previous is not None:
+        previous.unlink()
+    print(f"Removed {target}")
+    print("Kept shell PATH entries, other commands, the checkout, and custom tests.")
+    print("Remove any old torture alias manually if one remains in your shell configuration.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--update", action="store_true", help="fast-forward a clean main checkout from upstream")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--update", action="store_true", help="fast-forward a clean main checkout from upstream")
+    action.add_argument("--delete", action="store_true", help="remove the managed torture launcher (requires --confirm)")
+    parser.add_argument("--confirm", action="store_true", help="confirm --delete; never remove shared PATH directories")
     args = parser.parse_args()
+    if args.delete != args.confirm:
+        parser.error("uninstall requires both --delete and --confirm")
     root = Path(__file__).resolve().parent
     try:
+        if args.delete:
+            uninstall(Path.home())
+            return 0
         if args.update:
             update(root)
             # A newer installer may have changed: rerun it after the fast-forward.
