@@ -60,7 +60,7 @@ def parser(lang: str) -> argparse.ArgumentParser:
 
 @contextmanager
 def run_lock(root: Path):
-    # Existing C logs/stats and the legacy check adapter share checkout paths.
+    # C logs, statistics, and check probes share checkout paths.
     # Prevent two Python runs corrupting those files rather than racing silently.
     (root / "build").mkdir(exist_ok=True)
     with (root / "build/.runner.lock").open("a") as lock:

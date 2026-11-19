@@ -28,9 +28,9 @@ class InstallerTests(unittest.TestCase):
     def test_migrate_reinstall_and_launch(self):
         with tempfile.TemporaryDirectory(prefix="ftorture home '") as tmp:
             home = Path(tmp)
-            old = home / ".local/applications/torture.sh"
+            old = home / ".local/applications/old-launcher"
             old.parent.mkdir(parents=True)
-            old.write_text(f"#!/bin/bash\n{installer.MARKER}\n")
+            old.write_text(f"#!/usr/bin/env python3\n{installer.MARKER}\n")
             target = home / ".local/bin/torture"
             target.parent.mkdir(parents=True)
             target.symlink_to(old)
@@ -46,7 +46,7 @@ class InstallerTests(unittest.TestCase):
     def test_preserve_unrelated_files_and_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            old = home / ".local/applications/torture.sh"
+            old = home / ".local/applications/old-launcher"
             old.parent.mkdir(parents=True)
             old.write_text("unrelated\n")
             target = installer.install(ROOT, home)
@@ -152,7 +152,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(GNL.passes(ctx, bonus=False), [])
 
 
-@unittest.skipUnless(all(shutil.which(tool) for tool in ("cc", "make", "nm", "bash")),
+@unittest.skipUnless(all(shutil.which(tool) for tool in ("cc", "make", "nm")),
                      "integration tests require Linux C build tools")
 class IntegrationTests(unittest.TestCase):
     def invoke(self, *arguments, cwd=None, env=None):
@@ -179,7 +179,7 @@ class IntegrationTests(unittest.TestCase):
                 self.assertFalse((directory / "ft_strlen.o").exists())
                 self.assertTrue((directory / "libft.a").is_file())
 
-    def test_legacy_checks_preserve_failures(self):
+    def test_subject_checks_preserve_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             self.libft_fixture(directory)
@@ -267,7 +267,7 @@ class IntegrationTests(unittest.TestCase):
             result = self.invoke("gnl", directory, "--no-checks", "-f", "nonsense")
             self.assertEqual(result.returncode, 2)
 
-    def test_gnl_good_mandatory_bonus_matches_bash(self):
+    def test_gnl_good_mandatory_bonus(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             source = '''#include <stdlib.h>
@@ -297,18 +297,17 @@ char *get_next_line(int fd) {
                 (directory / f"get_next_line{suffix}.h").write_text("char *get_next_line(int fd);\n")
                 (directory / f"get_next_line{suffix}.c").write_text(source)
                 (directory / f"get_next_line_utils{suffix}.c").write_text("")
-            args = ["gnl", str(directory), "--no-checks", "-f", "1,42", "--lang", "en", "--no-color"]
+            (directory / "README.md").write_text(
+                "*This project has been created as part of the 42 curriculum by student*\n"
+                "# Description\n# Instructions\n# Resources\nAlgorithm: read one byte at a time.\n")
+            args = ["gnl", str(directory), "--no-norm", "-f", "1,42", "--lang", "en", "--no-color"]
             result = self.invoke(*args)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("PART 2", result.stdout)
-            python_total = next(line for line in (ROOT / "ftorture.log").read_text().splitlines()
+            total = next(line for line in (ROOT / "ftorture.log").read_text().splitlines()
                                 if line.startswith("TOTAL:"))
-            baseline = subprocess.run(["bash", str(ROOT / "torture.sh"), *args],
-                                      capture_output=True, text=True, timeout=90)
-            self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
-            bash_total = next(line for line in (ROOT / "ftorture.log").read_text().splitlines()
-                              if line.startswith("TOTAL:"))
-            self.assertEqual(python_total, bash_total)
+            self.assertIn("0 failed, 0 speculative, 0 missing", total)
+            self.assertEqual(result.stdout.count("RESULT"), 1)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 from .archive import ArchiveProject
-from ..checks import legacy_checks
+from ..subject.archive import archive_checks
 from ..runtime import Context
 
 
 class LibftProject(ArchiveProject):
     def checks(self, ctx: Context) -> None:
-        legacy_checks(ctx)
+        archive_checks(ctx, self, linked_list=True)
 
     def run(self, ctx: Context) -> int:
         self.build_archive(ctx)
@@ -15,4 +15,4 @@ class LibftProject(ArchiveProject):
 
 
 PROJECT = LibftProject(key="libft", name="libft", header="libft.h", subject="19.3",
-                       parts=(1, 2, 3), archive="libft.a", source_dir="libft", check_tools=("bash",))
+                       parts=(1, 2, 3), archive="libft.a", source_dir="libft")

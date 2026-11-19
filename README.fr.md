@@ -16,26 +16,25 @@ qu'il fuit et ce qu'il lit en dehors de sa mémoire.
 
 Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft) : moteur C et
 orchestration Python modulaire. Dépendances : **Linux**, **Python 3.10+**, `cc`,
-`make`, `nm` et Bash pour les vérifications du sujet (migration ci-dessous).
+`make` et `nm`. Installation, orchestration et vérifications sont en Python.
 Aucun paquet pip requis ; norminette reste facultative.
 
 ## Installation
 
-```bash
+```text
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && python3 install.py
 ```
 
 `install.py` crée directement le lanceur Python exécutable `~/.local/bin/torture`.
 Aucun alias ni changement de configuration du shell. La réinstallation supprime
-l'ancien `~/.local/applications/torture.sh` uniquement s'il appartient à ftorture.
+les anciens lanceurs de `~/.local/applications` uniquement s'ils appartiennent à ftorture.
 Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
 Le lanceur conserve le dossier courant et transmet tous les arguments.
 Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
 (`https://github.com/HorusExE69/ftorture.git`), lance `python3 install.py --update`.
 Les modifications locales et les historiques divergents ne sont pas écrasés.
-`bash install.sh` reste un raccourci vers l'installateur Python. Supprime tout
-ancien alias `torture` restant dans ta configuration shell.
+Supprime tout ancien alias `torture` restant dans ta configuration shell.
 
 ## Utilisation
 
@@ -44,18 +43,17 @@ La langue suit la locale (`fr_*` : français, sinon anglais). Utilise
 
 ### Menu interactif
 
-```bash
+```text
 torture
 ```
 
 Le menu Python demande le numéro du projet puis son dossier. Le projet du dossier
 courant est sélectionné par défaut. Entrée accepte le choix proposé, `q` quitte.
-Les options de test se passent en ligne de commande. L'ancien menu Bash à flèches
-reste disponible avec `bash torture.sh` pendant la migration.
+Les options de test se passent en ligne de commande.
 
 ### En ligne de commande
 
-```bash
+```text
 torture libft ~/libft                # une libft
 torture printf ~/ft_printf           # un ft_printf (obligatoire + bonus)
 torture gnl ~/get_next_line          # une get_next_line (tous les BUFFER_SIZE)
@@ -88,23 +86,23 @@ une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée da
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
 
-### Migration Python et ajout de projets
+### Architecture Python et ajout de projets
 
 Python gère les arguments, la détection, les compilations, les passes obligatoires
 et bonus, les appels du moteur C, les codes de retour et le nettoyage. Le moteur C
-et ses tests restent inchangés. **Les vérifications du sujet ne sont pas encore
-portées** : `ftorture/checks.py` appelle les vérifications Bash seules et récupère
-`build/<projet>/checks.txt`. Les diagnostics sont dans `subject-checks.log`.
-`--no-checks` fonctionne sans Bash. Ne lance pas les anciens scripts Bash en même
-temps que Python : ils partagent les artefacts. Les exécutions Python se protègent
-entre elles par un verrou.
+et ses tests restent inchangés. Les vérifications natives de `ftorture/subject/`
+produisent `build/<projet>/checks.txt`. Les diagnostics du compilateur et des outils
+sont dans `build/<projet>/checks/`. Un verrou protège les artefacts et rapports
+contre les exécutions concurrentes.
+L'analyse des includes est heuristique : aucun verdict sur un en-tête non résolu.
+Vérifie manuellement les cas impliquant des macros complexes ou la compilation conditionnelle.
 
 Ajoute un module dans `ftorture/projects/`, implémente `Project` (`validate`,
 `checks`, `run`, `cleanup`), puis enregistre `PROJECT` dans
 `ftorture/projects/__init__.py`. La CLI et le menu utilisent ce registre.
 `ArchiveProject` fournit la stratégie Makefile/archive ; `GnlProject` illustre la
 compilation directe des sources. Les nouveaux projets doivent écrire leurs
-vérifications en Python, sans étendre l'adaptateur Bash. Voir le
+vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. Voir le
 [skill de création de testeurs](skills/ftorture-new-testers/SKILL.md).
 
 `ftorture/runtime.py` centralise les sous-processus, options et chemins ;

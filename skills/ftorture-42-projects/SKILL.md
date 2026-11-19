@@ -11,11 +11,11 @@ Use this skill when asked to test, diagnose, or explain results for a 42 **libft
 
 1. Locate the student's project and verify its expected header (`libft.h`, `ft_printf.h`, or `get_next_line.h`). libft and ft_printf also need a Makefile; GNL does not.
 2. Check the student's working tree and ask before running if build artifacts or uncommitted work must be preserved. The tester runs `make fclean`, builds `all`/`bonus`, and runs `make clean` for libft/printf. It may replace archives and remove object files. GNL is built in ftorture's `build/` directory instead.
-3. Use `python3 /path/to/ftorture/torture.py …`; if installed, use `torture …`. From the checkout, `python3 -m ftorture …` also works. Dependencies: Linux, Python 3.10+, `cc`, `make`, `nm`; subject checks still require Bash through a migration adapter. `--no-checks` needs no Bash; norminette is optional. No network or elevated privileges are needed to run tests. Install with `python3 install.py`; it writes only `~/.local/bin/torture` and safely removes the old managed applications launcher.
+3. Use `python3 /path/to/ftorture/torture.py …`; if installed, use `torture …`. From the checkout, `python3 -m ftorture …` also works. Dependencies: Linux, Python 3.10+, `cc`, `make`, `nm`; norminette is optional. Installation and all orchestration/checks are Python-native. No network or elevated privileges are needed to run tests. Install with `python3 install.py`; it writes only `~/.local/bin/torture` and safely removes old managed applications launchers.
 
 ## Run targeted tests first
 
-```bash
+```text
 torture libft  /path/to/libft -f strlen,split -v
 torture printf /path/to/ft_printf -p 1 -f %d,%s -v
 torture gnl    /path/to/get_next_line -p 1 -f 1,42
@@ -29,5 +29,6 @@ Omit `-f` and `-p` for the full run. With no arguments in a terminal, the Python
 - `▲` is speculative (undefined or subject-dependent behavior). It is a warning by default; `-s` makes it fail. Never present a speculative result as a guaranteed subject violation without checking the specification.
 - Check whether a failure is in **checks** (Makefile, submission files, prototypes, norm, symbols) or in a **function test**. Use `-v` and inspect `ftorture.log` in the ftorture checkout for full uncolored details; build/link diagnostics are in `build/<project>/`.
 - For printf, `bonus` requires a Makefile bonus rule. For GNL, bonus requires all `_bonus` sources. An absent bonus is not a tested pass. If building fails, report the compiler/Makefile error before drawing conclusions about behavior.
+- Include-use checks are heuristic. Unresolved headers get no verdict; verify findings involving complex macros or conditional compilation before recommending code changes.
 - Include the command, project path, relevant subject version, failing check/test and input, expected versus actual result, whether it is speculative, and the smallest reproducible rerun. Do not edit the student's code unless explicitly asked.
-- Exit codes: `0` pass, `1` failing tests/checks, `2` runner/build error, `130` interrupted. The transitional subject-check adapter writes `build/<project>/subject-checks.log`. Do not run the legacy Bash runner and Python runner concurrently; logs/build files are shared, and only Python runs participate in the checkout lock.
+- Exit codes: `0` pass, `1` failing tests/checks, `2` runner/build error, `130` interrupted. Native subject-check diagnostics are in `build/<project>/checks/`. Runs use a checkout lock because logs and build files are shared.

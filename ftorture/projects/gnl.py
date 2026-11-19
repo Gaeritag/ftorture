@@ -1,6 +1,6 @@
 """Source-only strategy: one isolated binary per BUFFER_SIZE and part."""
 from .base import Project
-from ..checks import legacy_checks
+from ..subject.gnl import gnl_checks
 from ..runtime import Context, RunnerError
 
 MANDATORY_SIZES = ("1", "2", "3", "5", "7", "10", "42", "100", "1024", "9999",
@@ -17,7 +17,7 @@ class GnlProject(Project):
                 raise RunnerError("Unknown BUFFER_SIZE: " + ", ".join(sorted(unknown)))
 
     def checks(self, ctx: Context) -> None:
-        legacy_checks(ctx)
+        gnl_checks(ctx, self.header, self.subject)
 
     def passes(self, ctx: Context, bonus: bool) -> list[tuple[int, str, str]]:
         selected = set(ctx.options.functions.split(",")) if ctx.options.functions else None
@@ -95,4 +95,4 @@ class GnlProject(Project):
 
 
 PROJECT = GnlProject(key="gnl", name="get_next_line", aliases=("get_next_line",),
-                     header="get_next_line.h", subject="14.3", check_tools=("bash", "make"))
+                     header="get_next_line.h", subject="14.3")

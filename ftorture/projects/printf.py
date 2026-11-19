@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from .archive import ArchiveProject
-from ..checks import legacy_checks
+from ..subject.archive import archive_checks
 from ..runtime import Context, RunnerError
 
 
 class PrintfProject(ArchiveProject):
     def checks(self, ctx: Context) -> None:
-        legacy_checks(ctx)
+        archive_checks(ctx, self, algorithm=True)
 
     def extra_archives(self, ctx: Context) -> list[Path]:
         libft = ctx.options.directory / "libft/libft.a"
@@ -44,4 +44,4 @@ class PrintfProject(ArchiveProject):
 
 PROJECT = PrintfProject(key="printf", name="ft_printf", aliases=("ft_printf",),
                        header="ft_printf.h", subject="12.1", archive="libftprintf.a",
-                       source_dir="printf", check_tools=("bash",))
+                       source_dir="printf")

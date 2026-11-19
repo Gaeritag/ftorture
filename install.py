@@ -38,9 +38,12 @@ def update(root: Path) -> None:
 
 def install(root: Path, home: Path) -> Path:
     target = home / ".local/bin/torture"
-    old = home / ".local/applications/torture.sh"
+    applications = home / ".local/applications"
     if target.is_symlink():
-        if os.readlink(target) != str(old) or (old.exists() and not managed(old)):
+        previous = Path(os.readlink(target))
+        if not previous.is_absolute():
+            previous = target.parent / previous
+        if previous.parent != applications or not managed(previous):
             raise RuntimeError(f"Refusing to replace an existing command: {target}")
     elif target.exists() and not managed(target):
         raise RuntimeError(f"Refusing to replace an existing command: {target}")
@@ -61,8 +64,11 @@ def install(root: Path, home: Path) -> Path:
     finally:
         if name is not None:
             name.unlink(missing_ok=True)
-    if managed(old):
-        old.unlink()
+    # Remove only tagged old launchers, regardless of filename or interpreter.
+    if applications.is_dir():
+        for previous in applications.iterdir():
+            if managed(previous):
+                previous.unlink()
     return target
 
 

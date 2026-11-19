@@ -5,7 +5,7 @@ description: Design and add reliable ftorture suites for new 42 projects, with s
 
 # Add a tester for another 42 project
 
-Use this skill when extending **ftorture itself**, not when testing a student's project. First read the exact 42 subject/version, `ftorture/projects/base.py`, `ftorture/runtime.py`, the nearest project module, `src/engine.c`, `src/project.h`, and `src/zft.h`. Python orchestrates builds and passes; C still implements the engine and test suites. Legacy subject checks temporarily run through `ftorture/checks.py`; do not expand that adapter for a new project. Do not assume libft's rules apply to another subject.
+Use this skill when extending **ftorture itself**, not when testing a student's project. First read the exact 42 subject/version, `ftorture/projects/base.py`, `ftorture/runtime.py`, the nearest project module, `ftorture/subject/`, `src/engine.c`, `src/project.h`, and `src/zft.h`. Python implements installation, checks, builds and passes; C implements the engine and test suites. Reuse native checks with subject-specific policies. Do not assume libft's rules apply to another subject.
 
 ## Design and integration
 

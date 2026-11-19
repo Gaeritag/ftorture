@@ -16,25 +16,24 @@ and what it reads outside its memory.
 
 Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft): a C test engine
 with modular Python orchestration. Requires **Linux**, **Python 3.10+**, `cc`,
-`make`, and `nm`. Subject checks currently also require Bash (see migration below).
+`make`, and `nm`. Installation, orchestration, and subject checks use Python only.
 No pip packages are needed; norminette is optional.
 
 ## Installation
 
-```bash
+```text
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
 cd ~/ftorture && python3 install.py
 ```
 
 `install.py` creates the executable Python launcher `~/.local/bin/torture` directly.
 No shell aliases or configuration changes are needed. Reinstalling removes
-the old `~/.local/applications/torture.sh` only if it is ftorture-managed.
+old launchers in `~/.local/applications` only if they are ftorture-managed.
 Ensure `~/.local/bin` is on your `PATH` (restart your shell if necessary).
 The launcher keeps your current directory and passes all arguments through.
 To fast-forward a clean `main` checkout from the **original** repository
 (`https://github.com/HorusExE69/ftorture.git`), run `python3 install.py --update`.
 Updates never overwrite local changes or merge divergent histories.
-`bash install.sh` remains a compatibility shortcut for the Python installer.
 Remove any old `torture` alias from your shell configuration if one still exists.
 
 Terminal output follows your locale (French for `fr_*`, English otherwise).
@@ -45,18 +44,17 @@ interactive menu and the plain-text report.
 
 ### Interactive menu
 
-```bash
+```text
 torture
 ```
 
 The Python menu asks for a project number and its directory; the current project's
 header determines the default selection. Enter accepts the default, `q` quits.
-Pass test options on the command line. The original arrow-key Bash menu is still
-available through `bash torture.sh` during migration.
+Pass test options on the command line.
 
 ### Command line
 
-```bash
+```text
 torture libft ~/libft                # a libft
 torture printf ~/ft_printf           # a ft_printf (mandatory + bonus)
 torture gnl ~/get_next_line          # a get_next_line (every BUFFER_SIZE)
@@ -89,30 +87,31 @@ error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
 ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
 
-### Python migration and contributor interface
+### Python architecture and contributor interface
 
 The Python runner owns argument validation, project detection, compilation,
 mandatory/bonus passes, C tester invocation, exit statuses, and cleanup. The
-existing C engine and tests are unchanged. **Subject checks are not ported yet**:
-`ftorture/checks.py` invokes the existing Bash checks in checks-only mode and
-consumes `build/<project>/checks.txt`; diagnostics go to `subject-checks.log`.
-`--no-checks` runs without Bash. Do not run the old Bash and Python runners
-concurrently: they share build files and the report. Python runs lock the checkout
-against other Python runs.
+existing C engine and tests are unchanged. Native subject checks in
+`ftorture/subject/` produce `build/<project>/checks.txt`; compiler and tool probe
+diagnostics are saved in `build/<project>/checks/`. Runs lock the checkout to
+prevent concurrent executions from corrupting build files and reports.
+Include-use analysis is heuristic: unresolved headers get no verdict. Review
+findings involving complex macros or conditional compilation against the subject.
 
 Add a project module under `ftorture/projects/`, implement the `Project` interface
 (`validate`, `checks`, `run`, `cleanup`), and register its `PROJECT` in
 `ftorture/projects/__init__.py`. The CLI/menu discover it from that registry.
 Use `ArchiveProject` for Makefile archives or implement a source build strategy
-like `GnlProject`. New projects should implement native checks rather than extend
-the legacy Bash adapter; `CheckReport` in `ftorture/checks.py` writes engine check
+like `GnlProject`. Reuse the native checks in `ftorture/subject/` with policies
+appropriate to the new subject; `CheckReport` in `ftorture/checks.py` writes engine check
 records without hand-building delimiters. See [the tester authoring skill](skills/ftorture-new-testers/SKILL.md).
 
 ```text
 ftorture/cli.py           CLI, validation, lock, lifecycle
 ftorture/runtime.py       options, subprocesses, artifacts, C-engine interface
 ftorture/projects/       project registry and build/test strategies
-ftorture/checks.py        temporary legacy subject-check adapter
+ftorture/checks.py        check records and compiler/tool probes
+ftorture/subject/        native file, Makefile, include, symbol and prototype checks
 ftorture/ui.py, i18n.py   menu and language selection
 src/                     existing C engine, helpers, and test suites
 ```

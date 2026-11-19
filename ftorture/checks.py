@@ -1,11 +1,7 @@
-"""Migration adapter for the established Bash subject checks.
-
-Only checks run in Bash. Python owns project builds, test passes and cleanup.
-New projects can implement Project.checks directly without changing this adapter.
-"""
+"""Native subject-check reports and compiler/tool probes."""
 from pathlib import Path
 
-from .runtime import Context, RunnerError
+from .runtime import Context
 
 
 class CheckReport:
@@ -45,21 +41,39 @@ class CheckReport:
         path.write_text("\n".join(self.records) + "\n", encoding="utf-8")
 
 
-def legacy_checks(ctx: Context) -> None:
-    env = {**ctx.env, "FTORTURE_CHECKS_ONLY": "1"}
-    # The legacy checker accepts a single executable for CC, not a command line.
-    if len(ctx.cc) != 1:
-        raise RunnerError(ctx.message(
-            "Subject checks currently require CC to name one compiler executable.",
-            "Les vérifications exigent actuellement un seul exécutable dans CC."))
-    args = ["bash", str(ctx.root / "torture.sh"), ctx.key, str(ctx.options.directory),
-            "--lang", ctx.options.lang, "--no-color"]
-    if not ctx.options.norm:
-        args.append("--no-norm")
-    log = ctx.build / "subject-checks.log"
-    status = ctx.command(args, env=env, log=log)
-    if status:
-        raise RunnerError(ctx.message("Subject checks could not finish; see",
-                                      "Vérifications interrompues ; voir") + f" {log}")
-    if not ctx.checks_file.is_file():
-        raise RunnerError(f"Missing checks file: {ctx.checks_file}")
+class CheckSession:
+    """One check run: localized records and inspectable probe diagnostics."""
+
+    def __init__(self, ctx: Context) -> None:
+        self.ctx = ctx
+        self.report = CheckReport()
+        self.directory = ctx.build / "checks"
+        self.directory.mkdir(exist_ok=True)
+        self.sequence = 0
+
+    def text(self, en: str, fr: str) -> str:
+        return self.ctx.message(en, fr)
+
+    def capture(self, args: list[str | Path], *, cwd: Path | None = None,
+                name: str = "probe") -> tuple[int, str]:
+        self.sequence += 1
+        log = self.directory / f"{self.sequence:03d}-{name}.log"
+        status = self.ctx.command(args, log=log, cwd=cwd)
+        return status, log.read_text(errors="replace")
+
+    def compiler(self, source: str, flags: tuple[str, ...] = ("-fsyntax-only",),
+                 *, name: str = "compiler") -> tuple[int, str]:
+        path = self.directory / f"{name}.c"
+        path.write_text(source, encoding="utf-8")
+        return self.capture([*self.ctx.cc, "-std=gnu11", f"-I{self.ctx.options.directory}",
+                             *flags, "-x", "c", path], name=name)
+
+    def check(self, status: str, en_label: str, fr_label: str,
+              en_detail: str = "", fr_detail: str = "") -> None:
+        self.report.check(status, self.text(en_label, fr_label), self.text(en_detail, fr_detail))
+
+    def details(self, values: list[str], limit: int = 12) -> None:
+        for value in values[:limit]:
+            self.report.detail(value)
+        if len(values) > limit:
+            self.report.detail(self.text(f"… {len(values) - limit} more", f"… {len(values) - limit} autres"))
