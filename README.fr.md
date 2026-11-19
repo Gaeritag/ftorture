@@ -14,20 +14,34 @@ qu'il fuit et ce qu'il lit en dehors de sa mémoire.
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, largeur, `# +`, ~22 000 appels comparés à `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`, fichiers, stdin, pipe, erreurs de `read`, bonus multi-fd |
 
-Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft), réécrit en C : rien à
-télécharger, il faut juste `cc`, `make` et `nm`. Pensé pour **Linux** (postes 42).
+Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft) : moteur C et
+orchestration Python modulaire. Dépendances : **Linux**, **Python 3.10+**, `cc`,
+`make` et `nm`. Installation, orchestration et vérifications sont en Python.
+Aucun paquet pip requis ; norminette reste facultative.
 
 ## Installation
 
 ```bash
 git clone https://github.com/HorusExE69/ftorture.git ~/ftorture
-cd ~/ftorture && bash install.sh
-source ~/.zshrc        # ou ~/.bashrc
+cd ~/ftorture && python3 install.py
 ```
 
-`install.sh` ajoute la commande **`torture`** à bash, zsh et fish.
+`install.py` crée directement le lanceur Python exécutable `~/.local/bin/torture`.
+Aucun alias. L'installateur ajoute `~/.local/bin` au PATH des fichiers de démarrage
+bash/zsh existants (ou crée celui du shell courant), et de fish si nécessaire,
+sans dupliquer les entrées existantes. La réinstallation supprime
+les anciens lanceurs de `~/.local/applications` uniquement s'ils appartiennent à ftorture.
+Vérifie que `~/.local/bin` est dans ton `PATH` (redémarre le shell si besoin).
+Le lanceur conserve le dossier courant et transmet tous les arguments.
+Pour mettre à jour un dépôt `main` propre depuis le **dépôt original**
+(`https://github.com/HorusExE69/ftorture.git`), lance `python3 install.py --update`.
+Les modifications locales et les historiques divergents ne sont pas écrasés.
+Supprime tout ancien alias `torture` restant dans ta configuration shell.
 
 ## Utilisation
+
+La langue suit la locale (`fr_*` : français, sinon anglais). Utilise
+`--lang fr` ou `--lang en` pour choisir la langue du menu, des tests et du rapport.
 
 ### Menu interactif
 
@@ -35,14 +49,17 @@ source ~/.zshrc        # ou ~/.bashrc
 torture
 ```
 
-Le logo reste en haut de chaque écran :
+Le TUI rétro original est conservé en Python : logo pixel, couleurs vertes et trois écrans.
 
-1. **projet** : `LIBFT`, `FT_PRINTF` ou `GNL` (`↑ ↓` ou `1` `2` `3`, Entrée). Si le
-   dossier courant contient un `libft.h`, un `ft_printf.h` ou un `get_next_line.h`, il
-   est présélectionné.
-2. **chemin** du projet (Tab pour compléter).
-3. **options** à cocher (Espace) : mode strict, verbose, vérifications, norminette,
-   puis `▶ LANCER LA TORTURE`.
+1. **Projet** : LIBFT, FT_PRINTF, GNL (`↑ ↓`, `j/k`, ou `1/2/3`, puis Entrée).
+   Le projet du dossier courant est présélectionné.
+2. **Chemin** : valeur par défaut modifiable, complétion Tab et nouvelle saisie en cas d'erreur.
+3. **Options** : Espace/Entrée coche le mode strict, verbose, vérifications, norminette
+   et ignorer les fichiers cachés ; sélectionner **LANCER LA TORTURE**. `q` quitte les menus.
+
+Les options CLI sans projet initialisent le menu. `--lang fr` garde les libellés
+français, `--no-color` garde la disposition sans couleurs. Le terminal et le curseur
+sont restaurés à la sortie, même après une interruption.
 
 ### En ligne de commande
 
@@ -65,14 +82,48 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
+| `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers et includes |
 | `--seed N` | graine du fuzzing (42 par défaut) |
 | `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl) |
 | `--no-color` | sans couleurs |
+| `--lang en\|fr` | choisir la langue de sortie |
+| `--list-projects` | lister les projets et versions de sujet |
+
+Sans installation : `python3 /chemin/ftorture/torture.py …`, ou
+`python3 -m ftorture …` depuis le dépôt. Les chemins avec espaces sont acceptés.
+`bash torture.sh …` et `bash install.sh [--update]` restent disponibles comme
+lanceurs de compatibilité ; toute la logique est en Python.
 
 À la fin, ftorture lance le `make clean` de ton projet (libft, ft_printf), même après
 une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
+
+### Architecture Python et ajout de projets
+
+Python gère les arguments, la détection, les compilations, les passes obligatoires
+et bonus, les appels du moteur C, les codes de retour et le nettoyage. Le moteur C
+conserve son comportement et les rapports bilingues. Les vérifications natives de `ftorture/subject/`
+produisent `build/<projet>/checks.txt`. Les diagnostics du compilateur et des outils
+sont dans `build/<projet>/checks/`. Un verrou protège les artefacts et rapports
+contre les exécutions concurrentes.
+L'analyse des includes est heuristique : aucun verdict sur un en-tête non résolu.
+Vérifie manuellement les cas impliquant des macros complexes ou la compilation conditionnelle.
+
+Ajoute un module dans `ftorture/projects/`, implémente `Project` (`validate`,
+`checks`, `run`, `cleanup`), puis enregistre `PROJECT` dans
+`ftorture/projects/__init__.py`. La CLI et le menu utilisent ce registre.
+`ArchiveProject` fournit la stratégie Makefile/archive ; `GnlProject` illustre la
+compilation directe des sources. Les nouveaux projets doivent écrire leurs
+vérifications en Python en réutilisant `ftorture/subject/` et `CheckReport`. Voir le
+[skill de création de testeurs](skills/ftorture-new-testers/SKILL.md).
+
+`ftorture/runtime.py` centralise les sous-processus, options et chemins ;
+`ftorture/ui.py` et `i18n.py` gèrent le menu et la langue. Validation :
+`python3 -m unittest discover -s tests -v`. Les tests utilisent des projets
+temporaires mais écrasent `build/` et `ftorture.log`. Codes de retour : `0` succès,
+`1` tests/vérifications en échec, `2` erreur du lanceur ou de compilation,
+`130` interruption. Un bonus ignoré n'est jamais présenté comme validé.
 
 ## Vérifications (libft et ft_printf)
 
