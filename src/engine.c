@@ -1641,7 +1641,7 @@ static int	summary(void)
 		g_inner = 76;
 	printf("\n   %s█▀▀▀%s %s %s", C_PHM, C_INV, L("RÉSULTAT", "RESULT"), C_RST);
 	printf("%s", C_PHM);
-	rep("▀", g_inner - 13);
+	rep("▀", g_inner - 5 - vis_len(L("RÉSULTAT", "RESULT")));
 	printf("█%s\n", C_RST);
 	box_line("%s", "");
 	for (p = 1; p <= g_proj.nparts; p++)
