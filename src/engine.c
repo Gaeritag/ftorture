@@ -12,6 +12,7 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <math.h>
 #include <time.h>
 #include "zft.h"
 
@@ -48,8 +49,10 @@ static struct s_opt
 	int			spec_pass;		/* every failure of this run is a ▲     */
 	int			no_section;		/* chained run: part header already out */
 	int			english;
+	int			eff;			/* --efficiency: time against the expected */
+	int			eff_target;		/* expected efficiency, in %              */
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL, 0, 0, 0};
+	NULL, 0, 0, 0, 0, 80};
 
 #define L(fr, en) (o.english ? (en) : (fr))
 
@@ -1068,6 +1071,274 @@ static int	selected(const t_func *f)
 		|| (f->label && in_list(o.only, f->label)));
 }
 
+/* ========================================================= efficiency === */
+/* Each BENCH runs in its own process, malloc not instrumented. Each side
+   (expected, yours) is calibrated to ~15 ms of repetitions, then they
+   alternate 3 times; the best time per repetition of each is kept.
+   efficiency = expected time / your time (100% = as fast as expected).     */
+typedef struct s_bench
+{
+	const char	*func;
+	void		(*fn)(long);
+}	t_bench;
+
+typedef struct s_bres
+{
+	char	label[40];
+	int		pct;		/* -1: crashed / could not be measured            */
+	int		bound;		/* 1: stopped by the time limit, real value lower  */
+}	t_bres;
+
+typedef struct s_bshm
+{
+	double	tref;		/* seconds per repetition, expected version        */
+	double	tft;		/* seconds per repetition, yours                   */
+	double	ft_start;	/* when your current run started (0: not running) */
+	long	n;			/* workload repetitions per run                   */
+}	t_bshm;
+
+#define BENCH_MAX 64
+#define BENCH_CALIB 0.015	/* seconds for one run of the expected version  */
+#define BENCH_LIMIT 2.0		/* seconds one run of yours may take            */
+/* (a run of yours is at most ~15 ms, or ONE repetition when that is longer) */
+
+static t_bench	g_benches[BENCH_MAX];
+static int		g_nbench;
+static t_bres	g_br[BENCH_MAX];
+static int		g_nbr;
+static t_bshm	*g_bshm;
+volatile long	g_bench_sink;
+
+void	zft_bench_register(const char *func, void (*fn)(long),
+			const char *file, int line)
+{
+	(void)file;
+	(void)line;
+	if (g_nbench < BENCH_MAX)
+		g_benches[g_nbench++] = (t_bench){func, fn};
+}
+
+static double	bnow(void)
+{
+	struct timespec	t;
+
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return ((double)t.tv_sec + (double)t.tv_nsec * 1e-9);
+}
+
+static double	bench_once(void (*fn)(long), int ref, long n)
+{
+	double	t;
+
+	g_ref = ref;
+	if (!ref)
+		g_bshm->ft_start = bnow();
+	t = bnow();
+	fn(n);
+	t = bnow() - t;
+	if (!ref)
+		g_bshm->ft_start = 0;
+	return (t);
+}
+
+static const t_bench	*bench_for(const char *func)
+{
+	int	i;
+
+	for (i = 0; i < g_nbench; i++)
+		if (!strcmp(g_benches[i].func, func))
+			return (&g_benches[i]);
+	return (NULL);
+}
+
+/* measures one benchmark, stores and returns its result */
+static t_bres	*run_bench(const t_bench *b, const char *label)
+{
+	t_bres	*r;
+	pid_t	pid;
+	int		st;
+	double	start;
+
+	if (g_nbr >= BENCH_MAX)
+		return (NULL);
+	r = &g_br[g_nbr++];
+	copy_trunc(r->label, sizeof(r->label), label);
+	r->pct = -1;
+	r->bound = 0;
+	if (!g_bshm)
+		g_bshm = mmap(NULL, sizeof(t_bshm), PROT_READ | PROT_WRITE,
+				MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (g_bshm == MAP_FAILED)
+		return (g_bshm = NULL, r);
+	g_bshm->tref = 0;
+	g_bshm->tft = 0;
+	g_bshm->ft_start = 0;
+	fflush(stdout);
+	if (g_log)
+		fflush(g_log);
+	pid = fork();
+	if (pid < 0)
+		return (r);
+	if (pid == 0)
+	{
+		int		dn = open("/dev/null", O_RDWR);
+		long	n = 1;
+		double	t;
+		int		k;
+
+		dup2(dn, 0);
+		dup2(dn, 1);
+		dup2(dn, 2);
+		signal(SIGPIPE, SIG_IGN);
+		g_zm_active = 0;
+		g_fail_at = 0;
+		g_armed = 0;
+		zsrand(o.seed);
+		long	nf = 1;
+		double	tf;
+
+		/* calibrate each side to ~BENCH_CALIB, then keep the best time per
+		   repetition of 3 alternated runs                                  */
+		bench_once(b->fn, 1, 1);
+		while ((t = bench_once(b->fn, 1, n)) < BENCH_CALIB && n < (1L << 30))
+			n = t > BENCH_CALIB / 64 ? (long)((double)n * BENCH_CALIB / t) + 1
+				: n * 4;
+		g_bshm->tref = t / (double)n;
+		g_bshm->n = n;
+		while ((tf = bench_once(b->fn, 0, nf)) < BENCH_CALIB
+			&& nf < (1L << 30))
+		{
+			g_bshm->tft = tf / (double)nf;
+			nf = tf > BENCH_CALIB / 64 ? (long)((double)nf * BENCH_CALIB / tf)
+				+ 1 : nf * 4;
+		}
+		g_bshm->tft = tf / (double)nf;
+		for (k = 1; k < 3; k++)
+		{
+			if ((t = bench_once(b->fn, 1, n) / (double)n) < g_bshm->tref)
+				g_bshm->tref = t;
+			if ((tf = bench_once(b->fn, 0, nf) / (double)nf) < g_bshm->tft)
+				g_bshm->tft = tf;
+		}
+		_exit(0);
+	}
+	start = bnow();
+	while (1)
+	{
+		pid_t	w = waitpid(pid, &st, WNOHANG);
+		double	fs = g_bshm->ft_start;
+
+		if (w == pid || (w < 0 && errno != EINTR))
+			break ;
+		if ((fs > 0 && bnow() - fs > BENCH_LIMIT)
+			|| bnow() - start > 30.0)
+		{
+			kill(pid, SIGKILL);
+			while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
+				;
+			if (!g_bshm->tft && fs > 0 && g_bshm->tref > 0)
+			{
+				g_bshm->tft = bnow() - fs;	/* one repetition takes more */
+				r->bound = 1;
+			}
+			st = 0;
+			break ;
+		}
+		usleep(2000);
+	}
+	if (getenv("FTORTURE_BENCH_DEBUG"))
+		fprintf(stderr, "[bench] %s: n=%ld ref=%.6fs ft=%.6fs%s\n", label,
+			g_bshm->n, g_bshm->tref, g_bshm->tft, r->bound ? " (limit)" : "");
+	if ((r->bound || (WIFEXITED(st) && !WEXITSTATUS(st)))
+		&& g_bshm->tref > 0 && g_bshm->tft > 0)
+	{
+		double	p = g_bshm->tref / g_bshm->tft * 100.0;
+
+		r->pct = p > 9999 ? 9999 : p < 1 ? 1 : (int)(p + 0.5);
+	}
+	return (r);
+}
+
+static const char	*eff_col(int pct)
+{
+	if (pct < 0)
+		return (C_GRY);
+	if (pct >= o.eff_target)
+		return (C_GRN);
+	return (pct * 2 >= o.eff_target ? C_YEL : C_RED);
+}
+
+static void	print_eff(const t_bres *r)
+{
+	if (!r)
+		return ;
+	if (r->pct < 0)
+		printf(L("  %s⚡ non mesurée (crash)%s", "  %s⚡ not measured (crash)%s"),
+			C_GRY, C_RST);
+	else
+		printf("  %s⚡ %s%d%%%s", eff_col(r->pct), r->bound ? "<" : "",
+			r->pct, C_RST);
+	if (g_log)
+	{
+		if (r->pct < 0)
+			fprintf(g_log, L("%s : efficacité non mesurée (crash)\n",
+				"%s: efficiency not measured (crash)\n"), r->label);
+		else
+			fprintf(g_log, L("%s : efficacité %s%d%% (objectif %d%%)\n",
+				"%s: efficiency %s%d%% (target %d%%)\n"), r->label,
+				r->bound ? "<" : "", r->pct, o.eff_target);
+	}
+}
+
+/* benchmarks attached to no function of the table (ft_printf): one line */
+static void	run_project_benches(void)
+{
+	int		i;
+	int		j;
+	char	lbl[64];
+
+	if (!o.eff)
+		return ;
+	for (i = 0; i < g_nbench; i++)
+	{
+		for (j = 0; j < NFUNCS; j++)
+			if (!strcmp(g_funcs[j].name, g_benches[i].func))
+				break ;
+		if (j < NFUNCS)
+			continue ;
+		char	pad[96];
+
+		snprintf(lbl, sizeof(lbl), "%s%s", g_benches[i].func,
+			o.part == 2 ? " (bonus)" : "");
+		padv(pad, sizeof(pad), lbl, 16);
+		printf("\n   %s%s%s", C_B, pad, C_RST);
+		print_eff(run_bench(&g_benches[i], lbl));
+		printf("\n");
+	}
+}
+
+/* gauge ▕████░░┃░░▏ with the target mark */
+static void	eff_gauge(char *out, size_t osz, int pct, int width)
+{
+	int		f = (pct > 100 ? 100 : pct) * width / 100;
+	int		m = o.eff_target * width / 100;
+	size_t	j = 0;
+	int		i;
+
+	if (m >= width)
+		m = width - 1;
+	out[0] = 0;
+	for (i = 0; i < width && j + 32 < osz; i++)
+	{
+		if (i == m)
+			j += (size_t)snprintf(out + j, osz - j, "%s%s%s", C_YEL,
+				i < f ? "▓" : "┃", C_RST);
+		else
+			j += (size_t)snprintf(out + j, osz - j, "%s%s%s",
+				i < f ? eff_col(pct) : C_PHD, i < f ? "█" : "░", C_RST);
+	}
+}
+
 static void	run_function(int fi, int *ti)
 {
 	t_func		*f = &g_funcs[fi];
@@ -1149,6 +1420,21 @@ static void	run_function(int fi, int *ti)
 		printf(" %s%s%d/%d%s", C_B, cnt_col, fs->pass, fs->total, C_RST);
 		if (fs->spec)
 			printf(" %s(%d ▲)%s", C_YEL, fs->spec, C_RST);
+		if (o.eff && bench_for(f->name))
+		{
+			char	bl[64];
+			int		k;
+			int		dup = 0;
+
+			/* gnl: the bonus suites have the same labels as the mandatory */
+			for (k = 0; k < NFUNCS; k++)
+				if (k != fi && g_funcs[k].part != f->part && f->label
+					&& g_funcs[k].label && !strcmp(g_funcs[k].label, f->label))
+					dup = 1;
+			snprintf(bl, sizeof(bl), "%s%s", f->label ? f->label : f->name,
+				dup && f->part == 2 ? " (bonus)" : "");
+			print_eff(run_bench(bench_for(f->name), bl));
+		}
 		printf("\n");
 	}
 	if (g_log)
@@ -1254,6 +1540,93 @@ static void	box_center(const char *fmt, ...)
 	box_line("%*s%s", pad > 0 ? pad : 0, "", buf);
 }
 
+/* summary lines: overall gauge + the slowest functions */
+static void	eff_summary(void)
+{
+	double	sum = 0;
+	int		n = 0;
+	int		i;
+	int		bw;
+	int		pct;
+	char	g[2048];
+	char	slow[512];
+	int		idx[BENCH_MAX];
+	int		ns = 0;
+
+	if (!o.eff && !g_nbr)
+		return ;
+	for (i = 0; i < g_nbr; i++)
+	{
+		if (g_br[i].pct < 0)
+			continue ;
+		/* geometric mean, each value kept in [1%, 200%]: one very fast
+		   function cannot hide a slow one                                  */
+		sum += log((double)(g_br[i].pct > 200 ? 200 : g_br[i].pct));
+		n++;
+		if (g_br[i].pct < o.eff_target)
+			idx[ns++] = i;
+	}
+	box_line("%s", "");
+	if (!n)
+	{
+		box_line(L("%sEFFICACITÉ%s %saucune mesure%s", "%sEFFICIENCY%s %sno measurement%s"),
+			C_PHD, C_RST, C_GRY, C_RST);
+		return ;
+	}
+	pct = (int)(exp(sum / n) + 0.5);
+	bw = g_inner - 2 - 38;
+	if (bw < 6)
+		bw = 6;
+	eff_gauge(g, sizeof(g), pct, bw);
+	box_line(L("%sEFFICACITÉ%s         %s▕%s%s▏%s %s%3d%%%s  %sobjectif %d%%%s", "%sEFFICIENCY%s         %s▕%s%s▏%s %s%3d%%%s  %starget %d%%%s"),
+		C_PH, C_RST, C_PHD, g, C_PHD, C_RST, eff_col(pct), pct, C_RST,
+		C_YEL, o.eff_target, C_RST);
+	/* the slowest first */
+	for (i = 1; i < ns; i++)
+	{
+		int	k = idx[i];
+		int	j = i - 1;
+
+		while (j >= 0 && g_br[idx[j]].pct > g_br[k].pct)
+		{
+			idx[j + 1] = idx[j];
+			j--;
+		}
+		idx[j + 1] = k;
+	}
+	if (ns)
+	{
+		size_t	l = 0;
+
+		int		room = g_inner - 2 - 22;	/* after "  sous l'objectif : " */
+		char	item[160];
+
+		slow[0] = 0;
+		for (i = 0; i < ns; i++)
+		{
+			snprintf(item, sizeof(item), "%s%s%s %s%s%d%%%s", i ? " · " : "",
+				C_B, g_br[idx[i]].label, eff_col(g_br[idx[i]].pct),
+				g_br[idx[i]].bound ? "<" : "", g_br[idx[i]].pct, C_RST);
+			if (vis_len(slow) + vis_len(item) + (i + 1 < ns ? 2 : 0) > room)
+			{
+				if (i)
+					l += (size_t)snprintf(slow + l, sizeof(slow) - l, " …");
+				break ;
+			}
+			l += (size_t)snprintf(slow + l, sizeof(slow) - l, "%s", item);
+		}
+		box_line(L("%s  sous l'objectif :%s %s", "%s  below target:%s %s"), C_PHD, C_RST, slow);
+	}
+	else
+		box_line(L("%s  %d/%d mesure(s) au-dessus de l'objectif%s", "%s  %d/%d measurement(s) above target%s"),
+			C_GRN, n, n, C_RST);
+	if (g_log)
+		fprintf(g_log, L("EFFICACITÉ: %d%% (objectif %d%%, %d mesure(s), "
+			"%d sous l'objectif)\n", "EFFICIENCY: %d%% (target %d%%, "
+			"%d measurement(s), %d below target)\n"), pct, o.eff_target, n,
+			ns);
+}
+
 static int	summary(void)
 {
 	int					p;
@@ -1332,6 +1705,7 @@ static int	summary(void)
 			g_ck.ko, C_RST, g_ck.warn ? C_YEL : C_PHD, g_ck.warn, C_RST,
 			g_ck.proto_ok == g_ck.proto_tot ? C_GRN : C_RED, g_ck.proto_ok,
 			g_ck.proto_tot, C_RST);
+	eff_summary();
 	box_line("%s", "");
 	bad = tf + miss + g_ck.ko + (o.spec ? ts : 0);
 	/* big pixel verdict */
@@ -1375,6 +1749,8 @@ static void	stats_save(const char *path)
 		return ;
 	fwrite(g_fs, sizeof(g_fs), 1, f);
 	fwrite(&g_ck, sizeof(g_ck), 1, f);
+	fwrite(&g_nbr, sizeof(g_nbr), 1, f);
+	fwrite(g_br, sizeof(t_bres), (size_t)g_nbr, f);
 	fclose(f);
 }
 
@@ -1390,6 +1766,10 @@ static void	stats_load(const char *path)
 		memset(g_fs, 0, sizeof(g_fs));
 		memset(&g_ck, 0, sizeof(g_ck));
 	}
+	else if (fread(&g_nbr, sizeof(g_nbr), 1, f) != 1 || g_nbr < 0
+		|| g_nbr > BENCH_MAX
+		|| fread(g_br, sizeof(t_bres), (size_t)g_nbr, f) != (size_t)g_nbr)
+		g_nbr = 0;
 	fclose(f);
 }
 
@@ -1413,6 +1793,8 @@ static void	usage(void)
 			"  -v, --verbose       show all failure details\n"
 			"  -f, --func LIST     filter functions\n"
 			"  -p, --part N        test part N\n"
+			"  -e, --efficiency [N] time each function against the expected\n"
+			"                      one, target N%% (default 80)\n"
 			"      --lang en|fr    output language\n"
 			"      --no-color     disable colors\n");
 		return ;
@@ -1429,6 +1811,8 @@ static void	usage(void)
 		"      --stats-out FILE, --stats-in FILE (passes chaînées)\n"
 		"      --seed N       graine des tests aléatoires\n"
 		"      --timeout S    timeout par test (défaut 3s)\n"
+		"  -e, --efficiency [N] chronomètre chaque fonction face à la version\n"
+		"                     attendue, objectif N%% (défaut 80)\n"
 		"      --lang en|fr   langue de sortie\n"
 		"      --no-color\n");
 }
@@ -1468,6 +1852,14 @@ int	main(int ac, char **av)
 			o.timeout = atoi(av[++i]);
 		else if (!strcmp(a, "--no-color"))
 			o.color = 0;
+		else if (!strcmp(a, "-e") || !strcmp(a, "--efficiency"))
+		{
+			o.eff = 1;
+			if (i + 1 < ac && av[i + 1][0] >= '0' && av[i + 1][0] <= '9')
+				o.eff_target = atoi(av[++i]);
+			if (o.eff_target < 1 || o.eff_target > 100)
+				o.eff_target = 80;
+		}
 		else if (!strcmp(a, "--lang") && i + 1 < ac)
 		{
 			const char *lang = av[++i];
@@ -1542,6 +1934,7 @@ int	main(int ac, char **av)
 			ti++;
 		run_function(i, &ti);
 	}
+	run_project_benches();
 	if (o.stats_out)
 		stats_save(o.stats_out);
 	i = o.no_summary ? run_status() : summary();

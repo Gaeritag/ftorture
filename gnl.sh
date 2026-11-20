@@ -187,12 +187,13 @@ gnl_pass() {
 		fi
 		return 0
 	fi
-	tests=("$FT_DIR/src/gnl/gnl.c" "$FT_DIR/src/gnl/proj.c" "$FT_DIR/src/gnl/t_gnl.c")
+	tests=("$FT_DIR/src/gnl/gnl.c" "$FT_DIR/src/gnl/proj.c" "$FT_DIR/src/gnl/t_gnl.c"
+		"$FT_DIR/src/gnl/b_gnl.c")
 	[ "$bonus" = 1 ] && tests+=("$FT_DIR/src/gnl/t_gnl_bonus.c")
 	if ! "$CC_BIN" -std=gnu11 -O0 -g -w -fno-builtin -I"$FT_DIR/src" -I"$FT_DIR/src/gnl" \
 		-D Z_BS="$zbs" -D GNL_SUITE="$key" "$BUILD/engine.o" "$BUILD/memtrack.o" \
 		"${tests[@]}" "$out"/*.o -Wl,--wrap=malloc -Wl,--wrap=free -Wl,--wrap=read \
-		-o "$out/tester" 2> "$out/link.log"; then
+		-lm -o "$out/tester" 2> "$out/link.log"; then
 		printf '%s   %-16s %s✘ impossible de lier le tester%s\n' "$CL" "BUFFER_SIZE=$bs" "$R" "$X"
 		head -n 6 "$out/link.log" | sed 's/^/        /'
 		GNL_FAILED=1

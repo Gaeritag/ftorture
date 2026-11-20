@@ -84,6 +84,24 @@ extern int	g_armed;		/* count mallocs only between ARM/DISARM         */
 # define ARM() (g_armed = 1)
 # define DISARM() (g_armed = 0)
 
+/* ----------------------------------------------------------- benchmarks -- */
+/* BENCH(F) { BENCH_LOOP { ... } } : one workload of function F, run zb_n
+   times. Use PICK(): g_ref = 1 runs the EXPECTED implementation (a plain,
+   sensible version compiled like the tester), g_ref = 0 yours. Timed only
+   with --efficiency; malloc is not instrumented during a benchmark.        */
+void	zft_bench_register(const char *func, void (*fn)(long),
+			const char *file, int line);
+extern volatile long	g_bench_sink;	/* keeps results alive               */
+
+# define BENCH(F) BENCH2(F, __COUNTER__)
+# define BENCH2(F, N) \
+	static void ZFT_CAT(zb_fn_, N)(long zb_n); \
+	__attribute__((constructor)) static void ZFT_CAT(zb_reg_, N)(void) \
+	{ zft_bench_register(#F, ZFT_CAT(zb_fn_, N), __FILE__, __LINE__); } \
+	static void ZFT_CAT(zb_fn_, N)(long zb_n)
+# define BENCH_LOOP for (long zb_i = 0; zb_i < zb_n; zb_i++)
+# define SINK(x) (g_bench_sink += (long)(x))
+
 /* ----------------------------------------------------------- assertions -- */
 __attribute__((noreturn)) void	zft_fail(const char *file, int line,
 			const char *expr, const char *expected, const char *got);

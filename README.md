@@ -51,7 +51,7 @@ The logo stays at the top of every screen:
    current folder contains a `libft.h`, a `ft_printf.h` or a `get_next_line.h`, it is
    preselected.
 2. **path** to the project (Tab completes).
-3. **options** to tick (Space): strict mode, verbose, checks, norminette, ignore hidden files, then
+3. **options** to tick (Space): strict mode, verbose, efficiency, checks, norminette, ignore hidden files, then
    `▶ LANCER LA TORTURE`.
 
 ### Command line
@@ -71,6 +71,7 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 |---|---|
 | `-s`, `--speculative` | speculative errors (▲) make the run fail |
 | `-v`, `--verbose` | show the details of every failure |
+| `-e`, `--efficiency [N]` | time each function against an expected version, gauge at the bottom, target N% (default 80) |
 | `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
@@ -176,6 +177,40 @@ with no NULL protection.
 
 ▲ are warnings: they don't make ftorture fail, except with `-s`. It's up to you to
 defend them during your evaluation.
+
+## Efficiency (`-e`)
+
+```bash
+torture libft ~/libft -e        # target 80% (default)
+torture gnl ~/get_next_line -e 50
+```
+
+Also a box in the menu, right under verbose. Each function is timed against an
+**expected** version written for ftorture and compiled like the tester (`-O0`):
+a plain, sensible implementation, **not** the optimised glibc. Each side runs in its
+own process, calibrated to ~15 ms of repetitions, 3 alternated runs, best time kept.
+
+**efficiency = expected time / your time**: 100% = as fast as expected, 50% = twice
+as slow. Each function gets `⚡ N%` on its line, and a gauge at the bottom of the
+result shows the geometric mean (each value kept between 1% and 200%, so one very
+fast function cannot hide a slow one), with a `┃` mark at the target and the
+functions below it. Efficiency is information only: it never turns the run KO.
+
+What "expected" means:
+
+- one pass when one pass is enough, no work done twice (`ft_split` that recomputes
+  the length of the whole string for each word, `ft_lstmap` that walks the new list
+  to the end for each node…);
+- one `write()` per string, number or run of text, not one per character
+  (`ft_putstr_fd`, `ft_putnbr_fd`, `ft_printf`);
+- get_next_line: the classic stash (the rest moved to the front after each line),
+  but grown by doubling and searched for `'\n'` in the new bytes only: linear even
+  with `BUFFER_SIZE=1`. A `strjoin` after every `read()` is quadratic in the length
+  of a line (a 20 000-character line is in the workload). Not measured without
+  `-D BUFFER_SIZE` (your default value is unknown).
+
+The workloads and the expected versions are in `src/*/b_*.c`
+(`FTORTURE_BENCH_DEBUG=1` prints the raw times).
 
 ## Legend
 

@@ -17,6 +17,8 @@ PASS=()
 DO_CHECKS=1
 DO_NORM=1
 IGNORE_HIDDEN=0
+EFF=0
+EFF_TARGET=80
 SPEC=0
 VERBOSE=0
 SEED=42
@@ -53,6 +55,8 @@ usage: torture                         interactive menu
 
   -s, --speculative   count speculative ▲ failures
   -v, --verbose       show details of every failure
+  -e, --efficiency [N] time each function against an expected version,
+                      gauge at the bottom, target N% (default 80)
   -f, --func LIST     filter functions or BUFFER_SIZE values
   -p, --part N        test only part N (1, 2 or 3)
       --no-checks     skip Makefile, norm, prototype and symbol checks
@@ -79,6 +83,8 @@ usage: torture                         menu interactif
 
   -s, --speculative   les erreurs spéculatives (▲) comptent comme des erreurs
   -v, --verbose       affiche le détail de chaque échec
+  -e, --efficiency [N] chronomètre chaque fonction face à une version attendue,
+                      jauge en bas, objectif N% (défaut 80)
   -f, --func LISTE    libft : split,itoa,ft_strlcat · printf : %d,%s,flag -
                       gnl : liste de BUFFER_SIZE, ex. 1,42,9999
   -p, --part N        libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus)
@@ -109,6 +115,9 @@ while [ $# -gt 0 ]; do
 		gnl|get_next_line) PROJ=gnl ;;
 		-s|--speculative) SPEC=1 ;;
 		-v|--verbose) VERBOSE=1 ;;
+		-e|--efficiency)
+			EFF=1
+			if [[ "${2:-}" =~ ^[0-9]+$ ]]; then EFF_TARGET="$2"; shift; fi ;;
 		-f|--func) FUNC_FILTER="$2"; shift ;;
 		-p|--part) PART="$2"; shift ;;
 		--seed) SEED="$2"; shift ;;
@@ -277,18 +286,19 @@ tui_path() {
 }
 
 tui_options() {
-	local sel=5 k
+	local sel=6 k
 	local labels=("mode strict (-s) : les ▲ comptent comme erreurs"
 		"verbose (-v) : tous les détails des échecs"
+		"efficacité (-e) : vitesse face à une version attendue, objectif $EFF_TARGET %"
 		"vérifications (Makefile, nm, prototypes, README…)"
 		"norminette"
 		"ignorer les fichiers cachés (--no-hidden)")
-	local vals=("$SPEC" "$VERBOSE" "$DO_CHECKS" "$DO_NORM" "$IGNORE_HIDDEN")
+	local vals=("$SPEC" "$VERBOSE" "$EFF" "$DO_CHECKS" "$DO_NORM" "$IGNORE_HIDDEN")
 	while true; do
 		cls
 		header_art
 		printf '   %sOPTIONS%s  %s%s · %s%s\n\n' "$B$PH" "$X" "$PHD" "$PROJ_LABEL" "$DIR" "$X"
-		for i in 0 1 2 3 4; do
+		for i in 0 1 2 3 4 5; do
 			local box="[ ]"
 			[ "${vals[$i]}" = 1 ] && box="[■]"
 			if [ $i = $sel ]; then
@@ -298,7 +308,7 @@ tui_options() {
 			fi
 		done
 		echo
-		if [ $sel = 5 ]; then
+		if [ $sel = 6 ]; then
 			printf '   %s ▶ LANCER LA TORTURE %s\n' "$INV" "$X"
 		else
 			printf '     %s▶ LANCER LA TORTURE%s\n' "$PHM" "$X"
@@ -306,17 +316,17 @@ tui_options() {
 		printf '\n   %s↑ ↓ naviguer · Espace cocher · Entrée lancer · q quitter%s\n' "$PHD" "$X"
 		k="$(read_key)"
 		case "$k" in
-			up) sel=$(((sel + 5) % 6)) ;;
-			down) sel=$(((sel + 1) % 6)) ;;
-			space) [ $sel -lt 5 ] && vals[$sel]=$((1 - vals[$sel])) ;;
+			up) sel=$(((sel + 6) % 7)) ;;
+			down) sel=$(((sel + 1) % 7)) ;;
+			space) [ $sel -lt 6 ] && vals[$sel]=$((1 - vals[$sel])) ;;
 			enter)
-				if [ $sel -lt 5 ]; then vals[$sel]=$((1 - vals[$sel]))
+				if [ $sel -lt 6 ]; then vals[$sel]=$((1 - vals[$sel]))
 				else break; fi ;;
 			quit) cls; exit 0 ;;
 		esac
 	done
-	SPEC="${vals[0]}"; VERBOSE="${vals[1]}"; DO_CHECKS="${vals[2]}"; DO_NORM="${vals[3]}"
-	IGNORE_HIDDEN="${vals[4]}"
+	SPEC="${vals[0]}"; VERBOSE="${vals[1]}"; EFF="${vals[2]}"
+	DO_CHECKS="${vals[3]}"; DO_NORM="${vals[4]}"; IGNORE_HIDDEN="${vals[5]}"
 }
 
 if [ "$NARGS" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
@@ -340,6 +350,7 @@ fi
 set_project "$PROJ"
 [ "$SPEC" = 1 ] && PASS+=("-s")
 [ "$VERBOSE" = 1 ] && PASS+=("-v")
+[ "$EFF" = 1 ] && PASS+=("-e" "$EFF_TARGET")
 PASS+=("--seed" "$SEED")
 PASS+=("--lang" "$LANG_CODE")
 [ -n "$NO_COLOR" ] && PASS+=("--no-color")
@@ -674,7 +685,7 @@ link_tester() {
 	if ! "$CC_BIN" -std=gnu11 -O0 -g -w -fno-builtin -I"$FT_DIR/src" \
 		-I"$FT_DIR/src/$SRC_SUB" "$FT_DIR/src/engine.c" "$FT_DIR/src/memtrack.c" \
 		"$FT_DIR/src/$SRC_SUB"/*.c -Wl,--wrap=malloc -Wl,--wrap=free \
-		"${usyms[@]}" "$A" "${extra[@]}" -o "$out" 2> "$BUILD/link.log"; then
+		"${usyms[@]}" "$A" "${extra[@]}" -lm -o "$out" 2> "$BUILD/link.log"; then
 		printf '%s\n   %s✘ Impossible de lier le tester avec ton %s :%s\n\n' "$CL" "$R$B" "$ARCHIVE" "$X"
 		head -n 20 "$BUILD/link.log" | sed 's/^/     /'
 		echo
