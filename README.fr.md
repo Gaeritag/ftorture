@@ -71,7 +71,7 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 |---|---|
 | `-s`, `--speculative` | les erreurs spéculatives (▲) font échouer |
 | `-v`, `--verbose` | affiche le détail de chaque échec |
-| `-e`, `--efficiency [N]` | chronomètre chaque fonction face à une version attendue, jauge en bas, objectif N % (défaut 80) |
+| `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 80) |
 | `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) |
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
@@ -187,34 +187,40 @@ torture libft ~/libft -e        # objectif 80 % (défaut)
 torture gnl ~/get_next_line -e 50
 ```
 
-Aussi une case dans le menu, juste sous verbose. Chaque fonction est chronométrée
-face à une version **attendue** écrite pour ftorture et compilée comme le tester
-(`-O0`) : une implémentation simple et sensée, **pas** la glibc optimisée. Chaque côté
-tourne dans son propre processus, calibré à ~15 ms de répétitions, 3 passes
-alternées, meilleur temps gardé.
+Aussi une case dans le menu, juste sous verbose. Il n'y a pas d'implémentation de
+référence : chaque charge de travail déclare le **travail minimal** d'une répétition,
+ce qu'une implémentation parfaite ne peut pas éviter (`ft_strlen` sur 1000
+caractères = 1 appel + 1000 octets lus ; `ft_putstr_fd` = la longueur + **un seul**
+`write()` ; get_next_line = un `read()` par `BUFFER_SIZE` octets, chaque octet cherché
+et copié une fois, un `malloc` par ligne). ftorture mesure une fois, **sur ta
+machine**, le coût de chaque unité avec la boucle la plus serrée qui la fait
+(compilée comme le tester, `-O0`, données dans le cache L1, la plus rapide de
+plusieurs formes de boucle, meilleur temps sur 20) : tour de boucle, octet lu /
+copié / écrit / comparé, appel, comparaison, chiffre, maillon de liste,
+`malloc`+`free`, gros `malloc`, appel système, octet ramené par `read()`. Le **temps
+parfait** est la somme.
 
-**efficacité = temps attendu / ton temps** : 100 % = aussi rapide qu'attendu, 50 % =
-deux fois plus lent. Chaque fonction a son `⚡ N%` sur sa ligne, et une jauge en bas
-du résultat montre la moyenne géométrique (chaque valeur gardée entre 1 % et 200 %,
-pour qu'une fonction très rapide ne cache pas une lente), avec un repère `┃` à
-l'objectif et les fonctions en dessous. L'efficacité est indicative : elle ne fait
-jamais passer le run en KO.
+**efficacité = temps parfait / ton vrai temps** : 100 % = aucun travail inutile. Ta
+fonction tourne dans son propre processus (malloc non instrumenté), calibrée à
+~15 ms de répétitions, meilleur temps par répétition sur 3 passes. Chaque fonction a
+son `⚡ N%` sur sa ligne ; la jauge du bas montre la moyenne géométrique (chaque
+valeur gardée entre 1 % et 200 %) avec un repère `┃` à l'objectif, les fonctions en
+dessous et les principaux coûts de la machine. Un peu plus de 100 % peut arriver (le
+code -O0 de ta boucle peut être un poil plus serré que la boucle de calibrage, ou tu
+compiles en `-O2`). L'efficacité est indicative : elle ne fait jamais passer le run
+en KO.
 
-Ce que veut dire « attendu » :
+Ce qui coûte en général : un `write()` par caractère (un appel système coûte des
+centaines d'opérations sur des octets : `ft_putstr_fd`, `ft_printf`), lire ou copier
+deux fois les mêmes données (`ft_strlcpy` qui calcule la longueur puis copie,
+`ft_split`), reparcourir une liste pour chaque maillon (`ft_lstmap`), une stash de
+get_next_line refaite par un `strjoin` après chaque `read()` (quadratique en la
+longueur d'une ligne) ou un buffer de `BUFFER_SIZE` alloué à chaque appel. Pas de
+mesure de GNL sans `-D BUFFER_SIZE`.
 
-- une seule passe quand une suffit, pas de travail fait deux fois (`ft_split` qui
-  recalcule la longueur de toute la chaîne pour chaque mot, `ft_lstmap` qui parcourt
-  la nouvelle liste jusqu'au bout pour chaque maillon…) ;
-- un `write()` par chaîne, nombre ou bloc de texte, pas un par caractère
-  (`ft_putstr_fd`, `ft_putnbr_fd`, `ft_printf`) ;
-- get_next_line : la stash classique (le reste ramené au début après chaque ligne),
-  mais agrandie en doublant et où `'\n'` n'est cherché que dans les nouveaux octets :
-  linéaire même avec `BUFFER_SIZE=1`. Un `strjoin` après chaque `read()` est
-  quadratique en la longueur d'une ligne (une ligne de 20 000 caractères fait partie
-  du test). Pas mesuré sans `-D BUFFER_SIZE` (ta valeur par défaut est inconnue).
-
-Les charges de travail et les versions attendues sont dans `src/*/b_*.c`
-(`FTORTURE_BENCH_DEBUG=1` affiche les temps bruts).
+Les charges de travail et leur `COST()` sont dans `src/*/b_*.c` ; `ftorture.log` donne
+le temps parfait et le vrai temps de chaque fonction et tous les coûts de la machine
+(`FTORTURE_BENCH_DEBUG=1` les affiche en direct).
 
 ## Légende
 

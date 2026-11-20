@@ -1,10 +1,11 @@
 /* ************************************************************************** */
 /*  Efficiency workload of get_next_line (--efficiency), one per BUFFER_SIZE. */
-/*  The EXPECTED get_next_line below is the classic one (stash, the rest     */
-/*  moved to the front after each line, BUFFER_SIZE bytes per read()), with  */
-/*  two sensible habits: the stash grows by doubling instead of a strjoin    */
-/*  after every read(), and '\n' is only searched in the new bytes. So it    */
-/*  stays linear in the length of a line, even with BUFFER_SIZE=1.           */
+/*  Reads a whole file (400 lines of 0..120 chars + one line of 20 000).     */
+/*  COST() is the minimal work of one pass, for this BUFFER_SIZE: one read() */
+/*  per BUFFER_SIZE bytes (+ the one that returns 0), every byte brought,    */
+/*  searched for '\n' and copied ONCE into its line, one malloc per line     */
+/*  (freed by the harness), one read buffer. A stash rebuilt by a strjoin    */
+/*  after every read(), or moved after every line, does more than that.      */
 /*  Not measured without -D BUFFER_SIZE (your default value is unknown).     */
 /* ************************************************************************** */
 #include <fcntl.h>
@@ -12,96 +13,13 @@
 
 #if Z_BS > 0
 
-typedef struct s_stash
-{
-	char	*buf;
-	size_t	off;	/* first byte not returned yet */
-	size_t	len;	/* bytes in buf                */
-	size_t	cap;
-}	t_stash;
+static size_t	g_len;
+static int		g_lines;
 
-static int	grow(t_stash *s, size_t need)
-{
-	char	*nb;
-	size_t	cap = s->cap ? s->cap : 64;
-
-	if (s->off && s->off * 2 >= s->len)
-	{
-		memmove(s->buf, s->buf + s->off, s->len - s->off);
-		s->len -= s->off;
-		s->off = 0;
-	}
-	if (s->len + need <= s->cap)
-		return (1);
-	while (cap < s->len + need)
-		cap *= 2;
-	nb = malloc(cap);
-	if (!nb)
-		return (0);
-	if (s->buf)
-		memcpy(nb, s->buf, s->len);
-	free(s->buf);
-	s->buf = nb;
-	s->cap = cap;
-	return (1);
-}
-
-static char	*cut(t_stash *s, size_t end)
-{
-	char	*line = malloc(end - s->off + 1);
-
-	if (!line)
-		return (NULL);
-	memcpy(line, s->buf + s->off, end - s->off);
-	line[end - s->off] = 0;
-	/* like most gnl: what is left goes back to the front of the stash */
-	memmove(s->buf, s->buf + end, s->len - end);
-	s->len -= end;
-	s->off = 0;
-	return (line);
-}
-
-static char	*e_gnl(int fd)
-{
-	static t_stash	s;
-	char			*buf;
-	size_t			seen = 0;	/* bytes after s.off already searched */
-	ssize_t			n = 1;
-	char			*nl = NULL;
-
-	while (1)
-	{
-		if (s.len - s.off > seen)
-			nl = memchr(s.buf + s.off + seen, '\n', s.len - s.off - seen);
-		if (nl || n <= 0)
-			break ;
-		seen = s.len - s.off;
-		buf = malloc((size_t)Z_BS + 1);
-		if (!buf)
-			return (NULL);
-		n = read(fd, buf, (size_t)Z_BS);
-		if (n > 0 && grow(&s, (size_t)n))
-		{
-			memcpy(s.buf + s.len, buf, (size_t)n);
-			s.len += (size_t)n;
-		}
-		free(buf);
-	}
-	if (nl)
-		return (cut(&s, (size_t)(nl - s.buf) + 1));
-	if (s.len > s.off && n == 0)
-		return (cut(&s, s.len));
-	free(s.buf);
-	s = (t_stash){0};
-	return (NULL);
-}
-
-/* 400 lines of 0..120 chars, then one line of 20 000 chars */
 static int	bench_fd(void)
 {
 	static int	fd = -1;
 	static char	data[400 * 122 + 20002];
-	size_t		len = 0;
 	int			i;
 	int			k;
 
@@ -112,25 +30,31 @@ static int	bench_fd(void)
 		int	l = (int)(zrand() % 121);
 
 		for (k = 0; k < l; k++)
-			data[len++] = (char)('a' + (i + k) % 26);
-		data[len++] = '\n';
+			data[g_len++] = (char)('a' + (i + k) % 26);
+		data[g_len++] = '\n';
 	}
 	for (k = 0; k < 20000; k++)
-		data[len++] = (char)('A' + k % 26);
-	data[len++] = '\n';
-	fd = gnl_file(data, len);
+		data[g_len++] = (char)('A' + k % 26);
+	data[g_len++] = '\n';
+	g_lines = 401;
+	fd = gnl_file(data, g_len);
 	return (fd);
 }
 
 BENCH(GNL_SUITE)
 {
 	int		fd = bench_fd();
+	double	reads = (double)((g_len + (size_t)Z_BS - 1) / (size_t)Z_BS) + 1;
 	char	*l;
 
+	/* + 1 system call: the harness lseek() back to the start */
+	COST(.calls = g_lines + 1, .sys = reads + 1, .rbytes = (double)g_len,
+		.scan = (double)g_len, .copy = (double)g_len, .allocs = g_lines
+		+ (Z_BS < (1 << 20)), .big_allocs = Z_BS >= (1 << 20));
 	BENCH_LOOP
 	{
 		lseek(fd, 0, SEEK_SET);
-		while ((l = PICK(get_next_line, e_gnl)(fd)))
+		while ((l = get_next_line(fd)))
 		{
 			SINK(l[0]);
 			free(l);

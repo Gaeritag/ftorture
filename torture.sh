@@ -55,8 +55,8 @@ usage: torture                         interactive menu
 
   -s, --speculative   count speculative ▲ failures
   -v, --verbose       show details of every failure
-  -e, --efficiency [N] time each function against an expected version,
-                      gauge at the bottom, target N% (default 80)
+  -e, --efficiency [N] compare each function with a "perfect" time computed
+                      for this machine, gauge at the bottom, target N% (default 80)
   -f, --func LIST     filter functions or BUFFER_SIZE values
   -p, --part N        test only part N (1, 2 or 3)
       --no-checks     skip Makefile, norm, prototype and symbol checks
@@ -83,8 +83,8 @@ usage: torture                         menu interactif
 
   -s, --speculative   les erreurs spéculatives (▲) comptent comme des erreurs
   -v, --verbose       affiche le détail de chaque échec
-  -e, --efficiency [N] chronomètre chaque fonction face à une version attendue,
-                      jauge en bas, objectif N% (défaut 80)
+  -e, --efficiency [N] compare chaque fonction à un temps « parfait » calculé
+                      pour cette machine, jauge en bas, objectif N% (défaut 80)
   -f, --func LISTE    libft : split,itoa,ft_strlcat · printf : %d,%s,flag -
                       gnl : liste de BUFFER_SIZE, ex. 1,42,9999
   -p, --part N        libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus)
@@ -289,7 +289,7 @@ tui_options() {
 	local sel=6 k
 	local labels=("mode strict (-s) : les ▲ comptent comme erreurs"
 		"verbose (-v) : tous les détails des échecs"
-		"efficacité (-e) : vitesse face à une version attendue, objectif $EFF_TARGET %"
+		"efficacité (-e) : ton temps face au temps parfait de la machine, objectif $EFF_TARGET %"
 		"vérifications (Makefile, nm, prototypes, README…)"
 		"norminette"
 		"ignorer les fichiers cachés (--no-hidden)")
