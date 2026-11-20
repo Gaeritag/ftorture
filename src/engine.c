@@ -52,7 +52,7 @@ static struct s_opt
 	int			eff;			/* --efficiency: time against the expected */
 	int			eff_target;		/* expected efficiency, in %              */
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL, 0, 0, 0, 0, 80};
+	NULL, 0, 0, 0, 0, 50};
 
 #define L(fr, en) (o.english ? (en) : (fr))
 
@@ -1974,7 +1974,8 @@ static void	usage(void)
 			"  -f, --func LIST     filter functions\n"
 			"  -p, --part N        test part N\n"
 			"  -e, --efficiency [N] compare each function with a perfect time\n"
-			"                      computed for this machine, target N%% (default 80)\n"
+			"                      computed for this machine, target N%% (default 50)\n"
+			"  -t, --target N      efficiency target in %%, turns -e on\n"
 			"      --lang en|fr    output language\n"
 			"      --no-color     disable colors\n");
 		return ;
@@ -1992,7 +1993,8 @@ static void	usage(void)
 		"      --seed N       graine des tests aléatoires\n"
 		"      --timeout S    timeout par test (défaut 3s)\n"
 		"  -e, --efficiency [N] compare chaque fonction à un temps parfait\n"
-		"                     calculé pour cette machine, objectif N%% (défaut 80)\n"
+		"                     calculé pour cette machine, objectif N%% (défaut 50)\n"
+		"  -t, --target N     objectif d'efficacité en %%, active -e\n"
 		"      --lang en|fr   langue de sortie\n"
 		"      --no-color\n");
 }
@@ -2038,7 +2040,14 @@ int	main(int ac, char **av)
 			if (i + 1 < ac && av[i + 1][0] >= '0' && av[i + 1][0] <= '9')
 				o.eff_target = atoi(av[++i]);
 			if (o.eff_target < 1 || o.eff_target > 100)
-				o.eff_target = 80;
+				o.eff_target = 50;
+		}
+		else if ((!strcmp(a, "-t") || !strcmp(a, "--target")) && i + 1 < ac)
+		{
+			o.eff = 1;
+			o.eff_target = atoi(av[++i]);
+			if (o.eff_target < 1 || o.eff_target > 100)
+				o.eff_target = 50;
 		}
 		else if (!strcmp(a, "--lang") && i + 1 < ac)
 		{

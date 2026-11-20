@@ -71,7 +71,8 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 |---|---|
 | `-s`, `--speculative` | speculative errors (▲) make the run fail |
 | `-v`, `--verbose` | show the details of every failure |
-| `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 80) |
+| `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
+| `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
 | `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
@@ -181,8 +182,8 @@ defend them during your evaluation.
 ## Efficiency (`-e`)
 
 ```bash
-torture libft ~/libft -e        # target 80% (default)
-torture gnl ~/get_next_line -e 50
+torture libft ~/libft -e        # target 50% (default)
+torture gnl ~/get_next_line -t 30
 ```
 
 Also a box in the menu, right under verbose. There is no reference implementation:

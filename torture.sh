@@ -18,7 +18,7 @@ DO_CHECKS=1
 DO_NORM=1
 IGNORE_HIDDEN=0
 EFF=0
-EFF_TARGET=80
+EFF_TARGET=50
 SPEC=0
 VERBOSE=0
 SEED=42
@@ -56,7 +56,8 @@ usage: torture                         interactive menu
   -s, --speculative   count speculative ▲ failures
   -v, --verbose       show details of every failure
   -e, --efficiency [N] compare each function with a "perfect" time computed
-                      for this machine, gauge at the bottom, target N% (default 80)
+                      for this machine, gauge at the bottom, target N% (default 50)
+  -t, --target N      efficiency target in % (1-100), turns -e on
   -f, --func LIST     filter functions or BUFFER_SIZE values
   -p, --part N        test only part N (1, 2 or 3)
       --no-checks     skip Makefile, norm, prototype and symbol checks
@@ -84,7 +85,8 @@ usage: torture                         menu interactif
   -s, --speculative   les erreurs spéculatives (▲) comptent comme des erreurs
   -v, --verbose       affiche le détail de chaque échec
   -e, --efficiency [N] compare chaque fonction à un temps « parfait » calculé
-                      pour cette machine, jauge en bas, objectif N% (défaut 80)
+                      pour cette machine, jauge en bas, objectif N% (défaut 50)
+  -t, --target N      objectif d'efficacité en % (1-100), active -e
   -f, --func LISTE    libft : split,itoa,ft_strlcat · printf : %d,%s,flag -
                       gnl : liste de BUFFER_SIZE, ex. 1,42,9999
   -p, --part N        libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus)
@@ -118,6 +120,10 @@ while [ $# -gt 0 ]; do
 		-e|--efficiency)
 			EFF=1
 			if [[ "${2:-}" =~ ^[0-9]+$ ]]; then EFF_TARGET="$2"; shift; fi ;;
+		-t|--target)
+			[[ "${2:-}" =~ ^[0-9]+$ ]] && [ "$2" -ge 1 ] && [ "$2" -le 100 ] \
+				|| { echo "--target attend un pourcentage entre 1 et 100"; exit 2; }
+			EFF=1; EFF_TARGET="$2"; shift ;;
 		-f|--func) FUNC_FILTER="$2"; shift ;;
 		-p|--part) PART="$2"; shift ;;
 		--seed) SEED="$2"; shift ;;

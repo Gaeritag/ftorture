@@ -71,7 +71,8 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 |---|---|
 | `-s`, `--speculative` | les erreurs spéculatives (▲) font échouer |
 | `-v`, `--verbose` | affiche le détail de chaque échec |
-| `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 80) |
+| `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 50) |
+| `-t`, `--target N` | objectif d'efficacité en % (1–100) ; active `-e` |
 | `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) |
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
@@ -183,8 +184,8 @@ de savoir les défendre en correction.
 ## Efficacité (`-e`)
 
 ```bash
-torture libft ~/libft -e        # objectif 80 % (défaut)
-torture gnl ~/get_next_line -e 50
+torture libft ~/libft -e        # objectif 50 % (défaut)
+torture gnl ~/get_next_line -t 30
 ```
 
 Aussi une case dans le menu, juste sous verbose. Il n'y a pas d'implémentation de
