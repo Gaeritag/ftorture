@@ -66,7 +66,7 @@ and three screens:
 1. **Project**: LIBFT, FT_PRINTF, GNL (`↑ ↓`, `j/k`, or `1/2/3`, then Enter).
    The current project's header determines the default selection.
 2. **Path**: editable default, Tab completion, and validation with retry.
-3. **Options**: Space/Enter toggles strict mode, verbose, checks, norminette, and
+3. **Options**: Space/Enter toggles strict mode, verbose, efficiency, checks, norminette, and
    ignore-hidden; select **START TESTING** to run. `q` quits either menu.
 
 Command-line options supplied without a target initialize the menu. `--lang fr`
@@ -90,6 +90,8 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 |---|---|
 | `-s`, `--speculative` | speculative errors (▲) make the run fail |
 | `-v`, `--verbose` | show the details of every failure |
+| `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
+| `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
 | `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
@@ -262,6 +264,44 @@ with no NULL protection.
 
 ▲ are warnings: they don't make ftorture fail, except with `-s`. It's up to you to
 defend them during your evaluation.
+
+## Efficiency (`-e`)
+
+```bash
+torture libft ~/libft -e        # target 50% (default)
+torture gnl ~/get_next_line -t 30
+```
+
+Also a box in the menu, right under verbose. There is no reference implementation:
+each workload declares the **minimal work** one repetition needs, what a perfect
+implementation cannot avoid (`ft_strlen` on 1000 chars = 1 call + 1000 bytes read;
+`ft_putstr_fd` = the length + **one** `write()`; get_next_line = one `read()` per
+`BUFFER_SIZE` bytes, each byte searched and copied once, one `malloc` per line).
+ftorture measures once, **on your machine**, the cost of each unit with the tightest
+loop that does it (compiled like the tester, `-O0`, data in the L1 cache, fastest of
+several loop shapes, best of 20): loop turn, byte read / copied / written /
+compared, call, comparison, digit, list node, `malloc`+`free`, big `malloc`, system
+call, byte brought by `read()`. The **perfect time** is the sum.
+
+**efficiency = perfect time / your real time**: 100% = no wasted work. Your function
+runs in its own process (malloc not instrumented), calibrated to ~15 ms of
+repetitions, best time per repetition of 3 runs. Each function gets `⚡ N%` on its
+line; the bottom gauge shows the geometric mean (each value kept between 1% and
+200%) with a `┃` mark at the target, the functions below it, and the main machine
+costs. A little over 100% can happen (the -O0 code of your loop may be a bit
+tighter than the calibration loop, or you compile with `-O2`). Efficiency is
+information only: it never turns the run KO.
+
+What usually costs: a `write()` per character (a system call costs hundreds of byte
+operations: `ft_putstr_fd`, `ft_printf`), scanning or copying the same data twice
+(`ft_strlcpy` that computes the length then copies, `ft_split`), walking a list again
+for each node (`ft_lstmap`), a get_next_line stash rebuilt by a `strjoin` after every
+`read()` (quadratic in the length of a line) or a `BUFFER_SIZE` buffer allocated at
+every call. GNL is not measured without `-D BUFFER_SIZE`.
+
+The workloads and their `COST()` are in `src/*/b_*.c`; `ftorture.log` gives the
+perfect and real time of each function and every machine cost
+(`FTORTURE_BENCH_DEBUG=1` prints them live).
 
 ## Legend
 

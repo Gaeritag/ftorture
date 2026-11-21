@@ -62,14 +62,14 @@ class GnlProject(Project):
                 print(f"{'▲' if accepted else '✘'} BUFFER_SIZE={size}: " + ctx.message(
                     "compilation failed; see", "échec de compilation ; voir") + f" {out}", flush=True)
                 continue
-            tests = [ctx.root / "src/gnl" / name for name in ("gnl.c", "proj.c", "t_gnl.c")]
+            tests = [ctx.root / "src/gnl" / name for name in ("gnl.c", "proj.c", "t_gnl.c", "b_gnl.c")]
             if part == 2:
                 tests.append(ctx.root / "src/gnl/t_gnl_bonus.c")
             executable = out / "tester"
             if not ctx.compile([*flags, "-D", f"Z_BS={-1 if size == 'def' else size}",
                          "-D", f"GNL_SUITE={key}", ctx.build / "engine.o", ctx.build / "memtrack.o",
                          *tests, *objects, "-Wl,--wrap=malloc", "-Wl,--wrap=free", "-Wl,--wrap=read",
-                         "-o", executable], out / "link.log"):
+                         "-lm", "-o", executable], out / "link.log"):
                 failed = True
                 print(f"✘ BUFFER_SIZE={size}: " + ctx.message(
                     "cannot link tester; see", "impossible de lier le tester ; voir") + f" {out / 'link.log'}", flush=True)

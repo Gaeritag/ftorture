@@ -51,7 +51,7 @@ class ArchiveProject(Project):
                 ctx.root / "src/memtrack.c", *sorted((ctx.root / "src" / self.source_dir).glob("*.c")),
                 "-Wl,--wrap=malloc", "-Wl,--wrap=free",
                 *(f"-Wl,-u,{symbol}" for symbol in symbols), archive, *self.extra_archives(ctx),
-                "-o", executable]
+                "-lm", "-o", executable]
         ctx.require(args, ctx.build / "link.log")
         return executable
 
