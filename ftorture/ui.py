@@ -221,10 +221,14 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
     labels = [
         terminal.t("strict mode (-s): ▲ count as errors", "mode strict (-s) : les ▲ comptent comme erreurs"),
         terminal.t("verbose (-v): all failure details", "verbose (-v) : tous les détails des échecs"),
+        terminal.t(
+            f"efficiency (-e): your time vs this machine's perfect time, target {options.efficiency_target}%",
+            f"efficacité (-e) : ton temps face au temps parfait de la machine, objectif {options.efficiency_target} %",
+        ),
         terminal.t("checks (Makefile, nm, prototypes, README…)", "vérifications (Makefile, nm, prototypes, README…)"),
         "norminette", terminal.t("ignore hidden files (--no-hidden)", "ignorer les fichiers cachés (--no-hidden)"),
     ]
-    keys = ["speculative", "verbose", "checks", "norm", "ignore_hidden"]
+    keys = ["speculative", "verbose", "efficiency", "checks", "norm", "ignore_hidden"]
     if project.custom:
         # Subject/norm/include switches have no meaning for user command suites.
         labels, keys = labels[:2], keys[:2]

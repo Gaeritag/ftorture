@@ -37,6 +37,36 @@ def unsigned(value: str) -> int:
     return number
 
 
+def percentage(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected a percentage between 1 and 100") from exc
+    if not 1 <= number <= 100:
+        raise argparse.ArgumentTypeError("expected a percentage between 1 and 100")
+    return number
+
+
+def normalize_efficiency_args(argv: list[str]) -> list[str]:
+    normalized: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "--":
+            normalized.extend(argv[index:])
+            break
+        if token.startswith("--efficiency="):
+            normalized.append("--target=" + token.split("=", 1)[1])
+            index += 1
+        elif token in ("-e", "--efficiency") and index + 1 < len(argv) and argv[index + 1].isdigit():
+            normalized.append(f"--target={argv[index + 1]}")
+            index += 2
+        else:
+            normalized.append(token)
+            index += 1
+    return normalized
+
+
 def parser(lang: str) -> argparse.ArgumentParser:
     def t(en: str, fr: str) -> str:
         return text(lang, en, fr)
@@ -49,6 +79,11 @@ def parser(lang: str) -> argparse.ArgumentParser:
     result.add_argument("--custom-tests-dir", type=Path, help=t("directory of user test manifests", "dossier des tests personnalisés"))
     result.add_argument("-s", "--speculative", action="store_true", help=t("count ▲ as failures", "compter les ▲ comme erreurs"))
     result.add_argument("-v", "--verbose", action="store_true", help=t("show all failure details", "afficher tous les détails"))
+    result.add_argument("-e", "--efficiency", action="store_true", help=t(
+        "compare each function with a perfect time, optional target N%% (default: 50)",
+        "comparer chaque fonction à un temps parfait, objectif N %% optionnel (défaut : 50)"))
+    result.add_argument("-t", "--target", dest="efficiency_target", type=percentage, metavar="N", help=t(
+        "efficiency target in %% (1-100); turns -e on", "objectif d'efficacité en %% (1-100) ; active -e"))
     result.add_argument("-f", "--func", help=t("function or BUFFER_SIZE filter", "filtre fonction ou BUFFER_SIZE"))
     result.add_argument("-p", "--part", type=positive, help=t("test only part N", "tester seulement la partie N"))
     result.add_argument("--seed", type=unsigned, default=42, help=t("random seed (default: 42)", "graine aléatoire (défaut : 42)"))
@@ -103,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     language.add_argument("--lang", choices=("en", "fr"), default=default_language())
     lang = language.parse_known_args(argv)[0].lang
     cli = parser(lang)
-    args = cli.parse_intermixed_args(argv)
+    args = cli.parse_intermixed_args(normalize_efficiency_args(argv))
     old_term = signal.getsignal(signal.SIGTERM)
 
     def interrupt(signum, frame):
@@ -128,6 +163,8 @@ def main(argv: list[str] | None = None) -> int:
             raise RunnerError(f"{directory}: " + text(lang, "directory not found", "dossier introuvable"))
         options = Options(directory=directory, lang=lang, checks=not args.no_checks,
                           norm=not args.no_norm, speculative=args.speculative, verbose=args.verbose,
+                          efficiency=args.efficiency or args.efficiency_target is not None,
+                          efficiency_target=50 if args.efficiency_target is None else args.efficiency_target,
                           seed=args.seed, part=args.part, functions=args.func, timeout=args.timeout,
                           no_color=args.no_color, ignore_hidden=args.no_hidden)
         if args.target is None and sys.stdin.isatty() and sys.stdout.isatty():

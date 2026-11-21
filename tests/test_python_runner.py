@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from ftorture.cli import execute, run_lock
+from ftorture.cli import execute, normalize_efficiency_args, parser, run_lock
 from ftorture.checks import CheckReport
 from ftorture.language import default_language
 from ftorture.projects import detect, find
@@ -258,10 +258,34 @@ class RunnerTests(unittest.TestCase):
                         self.fail("second lock succeeded")
 
     def test_invalid_numeric_options(self):
-        for arguments in (["--timeout", "0"], ["--seed", "-1"], ["-p", "x"], ["--lang", "de"]):
+        for arguments in (["--timeout", "0"], ["--seed", "-1"], ["-p", "x"], ["--lang", "de"],
+                          ["-t", "0"], ["-t", "101"], ["-t", "abc"], ["-e", "0"], ["-e", "101"],
+                          ["--efficiency=abc"]):
             result = subprocess.run([sys.executable, str(ROOT / "torture.py"), *arguments],
                                     capture_output=True)
             self.assertEqual(result.returncode, 2)
+
+    def test_efficiency_cli_parsing_and_engine_args(self):
+        cli = parser("en")
+        cases = [
+            (["-e", "libft", "/tmp"], "libft", "/tmp", True, None),
+            (["libft", "/tmp", "-e"], "libft", "/tmp", True, None),
+            (["libft", "/tmp", "-e", "60"], "libft", "/tmp", False, 60),
+            (["libft", "/tmp", "--efficiency=75"], "libft", "/tmp", False, 75),
+            (["libft", "/tmp", "-t", "30"], "libft", "/tmp", False, 30),
+            (["-t", "30", "-e", "libft", "/tmp"], "libft", "/tmp", True, 30),
+        ]
+        for argv, target, directory, eff_flag, eff_target in cases:
+            with self.subTest(argv=argv):
+                args = cli.parse_intermixed_args(normalize_efficiency_args(argv))
+                self.assertEqual(args.target, target)
+                self.assertEqual(args.directory, directory)
+                self.assertEqual(args.efficiency, eff_flag)
+                self.assertEqual(args.efficiency_target, eff_target)
+        ctx = Context(ROOT, "libft", Options(Path("/tmp"), efficiency=True, efficiency_target=35))
+        engine = ctx.engine_args()
+        self.assertIn("-e", engine)
+        self.assertEqual(engine[engine.index("-e") + 1], "35")
 
     def test_gnl_pass_selection(self):
         ctx = Context(ROOT, "gnl", Options(Path("/unused"), part=2, functions="1,42"))
@@ -397,6 +421,17 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("cannot link tester", result.stdout)
             self.assertIn("BUFFER_SIZE=42", result.stdout)
             self.assertEqual(result.stdout.count("RESULT"), 1)
+
+    def test_libft_efficiency_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            self.libft_fixture(directory)
+            result = self.invoke("libft", directory, "--no-checks", "-f", "strlen", "-t", "40",
+                                 "--lang", "en", "--no-color")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("⚡", result.stdout)
+            self.assertIn("40%", result.stdout)
+            self.assertIn("RESULT", result.stdout)
 
     def test_gnl_good_mandatory_bonus(self):
         with tempfile.TemporaryDirectory() as tmp:

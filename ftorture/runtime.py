@@ -23,6 +23,8 @@ class Options:
     norm: bool = True
     speculative: bool = False
     verbose: bool = False
+    efficiency: bool = False
+    efficiency_target: int = 50
     seed: int = 42
     part: int | None = None
     functions: str | None = None
@@ -134,6 +136,8 @@ class Context:
             args.append("-s")
         if opts.verbose:
             args.append("-v")
+        if opts.efficiency:
+            args.extend(["-e", str(opts.efficiency_target)])
         if opts.no_color:
             args.append("--no-color")
         if opts.timeout:
