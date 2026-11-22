@@ -56,6 +56,7 @@ class ArchiveProject(Project):
         return executable
 
     def cleanup(self, ctx: Context) -> None:
-        status = self.make(ctx, "clean", log="clean.log")
+        status = self.make(ctx, "fclean", log="fclean.log")
         if status == 0:
-            print("   ▶ " + ctx.message("make clean: object files removed", "make clean : .o supprimés") + "\n", flush=True)
+            print("   ▶ " + ctx.message("make fclean: object files and archive removed",
+                                        "make fclean : .o et archive supprimés") + "\n", flush=True)

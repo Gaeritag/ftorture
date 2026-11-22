@@ -107,8 +107,8 @@ inutile de le lancer depuis le dépôt ftorture. Les chemins avec espaces sont a
 Le lanceur est uniquement en Python ; aucun wrapper shell n'est fourni.
 Conserve le dépôt : le lanceur installé y charge le code Python et les tests C.
 
-À la fin, ftorture lance le `make clean` de ton projet (libft, ft_printf), même après
-une erreur ou un Ctrl-C : il ne reste aucun `.o`. get_next_line est compilée dans le
+À la fin, ftorture lance le `make fclean` de ton projet (libft, ft_printf), même après
+une erreur ou un Ctrl-C : il ne reste ni `.o` ni archive. get_next_line est compilée dans le
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
 

@@ -318,7 +318,7 @@ class IntegrationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, int(broken), result.stdout + result.stderr)
                 self.assertIn("RESULT", result.stdout)
                 self.assertFalse((directory / "ft_strlen.o").exists())
-                self.assertTrue((directory / "libft.a").is_file())
+                self.assertFalse((directory / "libft.a").exists())  # final make fclean
 
     def test_subject_checks_preserve_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -347,7 +347,7 @@ class IntegrationTests(unittest.TestCase):
                 "from pathlib import Path\nimport time\n"
                 "Path('ready').touch()\ntime.sleep(30)\nPath('should-not-exist').touch()\n")
             (directory / "Makefile").write_text(
-                f"all:\n\t{sys.executable} slow.py\nclean:\n\ttouch cleaned\nfclean:\n\ttrue\n")
+                f"all:\n\t{sys.executable} slow.py\nclean:\n\ttrue\nfclean:\n\ttouch cleaned\n")
             with subprocess.Popen([sys.executable, str(ROOT / "torture.py"), "libft", str(directory),
                                    "--no-checks"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                   text=True) as process:

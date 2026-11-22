@@ -109,8 +109,8 @@ you do not need to start it from the ftorture checkout. Paths containing spaces
 are supported. The launcher is Python-only; no shell wrappers are provided.
 Keep the checkout in place: the installed launcher loads its Python code and C suites.
 
-At the end, ftorture runs your project's `make clean` (libft, ft_printf), even after an
-error or a Ctrl-C: no `.o` file is left behind. get_next_line is compiled in the
+At the end, ftorture runs your project's `make fclean` (libft, ft_printf), even after an
+error or a Ctrl-C: no `.o` file or archive is left behind. get_next_line is compiled in the
 ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
 
