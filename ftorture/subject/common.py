@@ -9,16 +9,35 @@ from collections.abc import Callable
 
 from ..checks import CheckSession
 from ..runtime import RunnerError
+from .gitignore import GitIgnore
 
 
-def project_files(root: Path, *, ignore_hidden: bool = False):
-    """Walk without following directory symlinks or entering Git metadata."""
+def project_files(root: Path, *, ignore_hidden: bool = False, gitignore: bool = True,
+                  skipped: list[Path] | None = None):
+    """Walk without following directory symlinks or entering Git metadata.
+
+    What the .gitignore files of the folder ignore is never pushed, so it is not
+    part of the submission: it is left out (and its folders are not entered).
+    `skipped` collects those top-level ignored entries.
+    """
+    rules = GitIgnore(root) if gitignore else None
     for parent, dirs, names in os.walk(root, followlinks=False):
-        dirs[:] = sorted(name for name in dirs if name != ".git" and not (ignore_hidden and name.startswith(".")))
-        for name in sorted(dirs + names):
-            path = Path(parent) / name
-            if name != ".git" and not (ignore_hidden and name.startswith(".")):
-                yield path
+        here = Path(parent)
+        if rules:
+            rules.enter(here)
+
+        def kept(name: str, is_dir: bool) -> bool:
+            if name == ".git" or (ignore_hidden and name.startswith(".")):
+                return False
+            if rules and rules.ignored(here / name, is_dir):
+                if skipped is not None:
+                    skipped.append(here / name)
+                return False
+            return True
+        dirs[:] = sorted(name for name in dirs if kept(name, True))
+        files = [name for name in names if kept(name, (here / name).is_dir())]
+        for name in sorted(dirs + files):
+            yield here / name
 
 
 def allowed_path(key: str, relative: str) -> bool:
@@ -41,7 +60,8 @@ def allowed_path(key: str, relative: str) -> bool:
 def check_files(session: CheckSession, allowed: Callable[[str], bool]) -> None:
     root = session.ctx.options.directory
     bad = []
-    for path in project_files(root, ignore_hidden=session.ctx.options.ignore_hidden):
+    skipped: list[Path] = []
+    for path in project_files(root, ignore_hidden=session.ctx.options.ignore_hidden, skipped=skipped):
         relative = path.relative_to(root).as_posix()
         if path.is_dir() and not path.is_symlink():
             if any(path.iterdir()) or (session.ctx.key == "printf" and relative == "libft"):
@@ -54,9 +74,11 @@ def check_files(session: CheckSession, allowed: Callable[[str], bool]) -> None:
         else:
             reason = session.text("unexpected submission file", "fichier à ne pas rendre")
         bad.append(f"{relative} ({reason})")
+    note_en = f" ({len(skipped)} ignored by .gitignore)" if skipped else ""
+    note_fr = f" ({len(skipped)} ignorés via .gitignore)" if skipped else ""
     session.check("KO" if bad else "OK", "Extra files", "Fichiers en trop",
-                  f"{len(bad)} unexpected files" if bad else "none",
-                  f"{len(bad)} fichiers inattendus" if bad else "aucun")
+                  (f"{len(bad)} unexpected files" if bad else "none") + note_en,
+                  (f"{len(bad)} fichiers inattendus" if bad else "aucun") + note_fr)
     session.details(bad)
 
 
@@ -89,7 +111,15 @@ def check_norm(session: CheckSession) -> None:
         session.check("SKIP", "Norminette", "Norminette", "not installed (pip install norminette)",
                       "non installée (pip install norminette)")
     else:
-        status, output = session.capture(["norminette"], cwd=session.ctx.options.directory, name="norminette")
+        # Only the submitted C files: nothing .gitignore'd (or hidden with --no-hidden).
+        directory = session.ctx.options.directory
+        sources = [path.relative_to(directory).as_posix() for path in project_files(
+                   directory, ignore_hidden=session.ctx.options.ignore_hidden)
+                   if path.suffix in (".c", ".h") and path.is_file() and not path.is_symlink()]
+        if not sources:
+            session.check("SKIP", "Norminette", "Norminette", "no .c or .h file", "aucun fichier .c ou .h")
+            return
+        status, output = session.capture(["norminette", *sources], cwd=directory, name="norminette")
         errors = [line for line in output.splitlines() if re.match(r"\s*Error:", line)]
         bad = bool(status or errors or "Error!" in output)
         session.check("KO" if bad else "OK", "Norminette", "Norminette",

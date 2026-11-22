@@ -97,7 +97,7 @@ torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les déta
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl / push_swap : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
-| `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers et includes |
+| `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers, includes et norminette |
 | `--seed N` | graine du fuzzing (42 par défaut) |
 | `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl, 20 s pour push_swap) |
 | `--no-color` | sans couleurs |
@@ -164,10 +164,15 @@ Bash et Python sur des copies temporaires d'un vrai projet libft.
 
 ## Vérifications (libft et ft_printf)
 
+Dans tous les projets, ce que les `.gitignore` du dossier ignorent (à la racine ou dans
+un sous-dossier, avec `!`, `**`, `/` comme git) n'est pas dans ton rendu : les fichiers en
+trop, les includes et norminette ne le regardent pas. La ligne « Fichiers en trop » dit
+combien d'entrées ont été ignorées ainsi.
+
 | Bloc | Détail |
 |---|---|
 | **Makefile** | règles `$(NAME) all clean fclean re` (+ `bonus` pour printf), `cc`, `-Wall -Wextra -Werror` sur chaque fichier (lu avec `make -nB`, même avec des `@`), `ar` et pas libtool, pas de `-std=c99`, **relink** (y compris `make bonus`), `clean` / `fclean` |
-| **Fichiers** | fichiers à rendre, **fichiers en trop en KO** (fichiers cachés hors `.git` / `.gitignore`, extensions inattendues comme `.py` `.cpp` `.txt` `.o`, dossiers vides), `README.md` (1re ligne en italique, Description / Instructions / Resources, + explication de l'algorithme pour printf) |
+| **Fichiers** | fichiers à rendre, **fichiers en trop en KO** (fichiers cachés hors `.git` / `.gitignore`, extensions inattendues comme `.py` `.cpp` `.txt` `.o`, dossiers vides ; ce que ton `.gitignore` ignore n'est jamais poussé, donc n'est pas compté), `README.md` (1re ligne en italique, Description / Instructions / Resources, + explication de l'algorithme pour printf) |
 | **Code** | norminette (si installée), **`#include` inutiles** (un `<lib.h>` doit fournir quelque chose d'utilisé, un `"x.h"` du projet une de ses fonctions, structs, macros ou libs ; doublons aussi), **fonctions externes interdites** (tout sauf `malloc`, `free`, `write`, avec le fichier fautif), **variables globales**, fonctions auxiliaires non `static` (libft), fonctions présentes dans l'archive |
 | **Prototypes** | chaque prototype du header comparé par le compilateur au **man Linux** / sujet, `t_list` exacte (libft), header qui compile seul |
 

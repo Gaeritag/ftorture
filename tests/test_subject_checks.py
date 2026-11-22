@@ -69,6 +69,33 @@ class FilePolicyTests(unittest.TestCase):
             self.assertTrue(any(record.startswith("C|KO|Extra files|") for record in session.report.records))
             self.assertTrue(any(".cache" in record for record in session.report.records))
 
+    def test_gitignored_files_are_not_part_of_the_submission(self):
+        with session_for() as (session, student):
+            (student / "get_next_line.c").write_text("#include <stdio.h>\nint f(void) { return 0; }\n")
+            (student / ".gitignore").write_text("# local tools\n*.pdf\n/notes.txt\nvisualizer/\n!keep.pdf\n")
+            (student / "subject.pdf").touch()
+            (student / "keep.pdf").touch()
+            (student / "notes.txt").touch()
+            (student / "visualizer").mkdir()
+            (student / "visualizer/tool.c").write_text("#include <stdio.h>\n")
+            (student / "visualizer/build.o").touch()
+            (student / "sub").mkdir()
+            (student / "sub/notes.txt").touch()  # /notes.txt is anchored to the root
+            (student / "sub/.gitignore").write_text("*.txt\n")  # nested rules apply below it
+            check_files(session, lambda path: allowed_path("gnl", path))
+            records = "\n".join(session.report.records)
+            self.assertIn("(4 ignored by .gitignore)", records)  # pdf, notes.txt, visualizer/, sub/notes.txt
+            for hidden in ("subject.pdf", "notes.txt (", "visualizer", "sub/notes.txt"):
+                self.assertNotIn(hidden, records)
+            self.assertIn("keep.pdf", records)  # re-included by !keep.pdf
+            sources = {path.name for path in IncludeAnalysis(session).sources}
+            self.assertEqual(sources, {"get_next_line.c"})
+            session.ctx = Context(session.ctx.root, "gnl", Options(student))
+            with patch("ftorture.subject.common.shutil.which", return_value="/norminette"), \
+                    patch.object(session, "capture", return_value=(0, "get_next_line.c: OK!\n")) as capture:
+                check_norm(session)
+            self.assertEqual(capture.call_args.args[0], ["norminette", "get_next_line.c"])
+
     def test_readme_and_algorithm(self):
         with session_for() as (session, student):
             check_readme(session, algorithm=True)
@@ -80,7 +107,8 @@ class FilePolicyTests(unittest.TestCase):
             self.assertTrue(session.report.records[-1].startswith("C|OK|README.md|"))
 
     def test_norminette_failure_and_disabled(self):
-        with session_for() as (session, _):
+        with session_for() as (session, student):
+            (student / "get_next_line.c").write_text("")
             check_norm(session)
             self.assertTrue(session.report.records[-1].startswith("C|SKIP|Norminette|"))
             session.ctx = Context(session.ctx.root, "gnl", Options(session.ctx.options.directory))

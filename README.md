@@ -99,7 +99,7 @@ torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl / push_swap: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
-| `--no-hidden` | ignore hidden files/folders in extra-file and include-use checks |
+| `--no-hidden` | ignore hidden files/folders in extra-file, include-use and norminette checks |
 | `--seed N` | fuzzing seed (default 42) |
 | `--timeout S` | per-test timeout (default 3 s, 10 s for gnl, 20 s for push_swap) |
 | `--no-color` | no colors |
@@ -177,6 +177,11 @@ See [validation instructions](docs/validation.md) for a safe legacy-Bash/Python
 comparison using temporary copies of a real libft project.
 
 ## Checks (libft and ft_printf)
+
+In every project, what the folder's `.gitignore` files ignore (at the root or in a
+subfolder, with `!`, `**` and `/` as in git) is not part of your submission: extra-file,
+include and norminette checks skip it. The "Extra files" line says how many entries were
+left out this way.
 
 | Area | Details |
 |---|---|
