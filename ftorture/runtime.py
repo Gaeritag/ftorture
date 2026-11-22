@@ -73,7 +73,7 @@ class Context:
 
     def command(self, args: list[str | Path], *, cwd: Path | None = None,
                 log: Path | None = None, env: dict[str, str] | None = None,
-                timeout: int | None = None) -> int:
+                timeout: int | None = None, stdin: str | None = None) -> int:
         command = [str(arg) for arg in args]
         progress = log is not None and sys.stdout.isatty()
         if progress:
@@ -82,20 +82,25 @@ class Context:
             green, dim, reset = ("\033[38;5;46m", "\033[38;5;34m", "\033[0m") if color else ("", "", "")
             print(f"\r\033[K   {green}▶{reset} {dim}{label}…{reset}", end="", flush=True)
         try:
-            return self._command(command, cwd=cwd, log=log, env=env, timeout=timeout)
+            return self._command(command, cwd=cwd, log=log, env=env, timeout=timeout, stdin=stdin)
         finally:
             if progress:
                 print("\r\033[K", end="", flush=True)
 
     def _command(self, command: list[str], *, cwd: Path | None,
-                 log: Path | None, env: dict[str, str] | None, timeout: int | None) -> int:
+                 log: Path | None, env: dict[str, str] | None, timeout: int | None,
+                 stdin: str | None = None) -> int:
         with log.open("w") if log else nullcontext(None) as output:
             # A private session lets cancellation stop make/compiler/test children
             # before cleanup touches the student's build artifacts.
             with subprocess.Popen(command, cwd=cwd, env=self.env if env is None else env, stdout=output,
                                   stderr=subprocess.STDOUT if log else None,
+                                  stdin=None if stdin is None else subprocess.PIPE,
                                   start_new_session=True) as process:
                 try:
+                    if stdin is not None:
+                        process.communicate(stdin.encode(), timeout=timeout)
+                        return process.returncode
                     return process.wait(timeout=timeout)
                 except (KeyboardInterrupt, subprocess.TimeoutExpired) as exc:
                     try:

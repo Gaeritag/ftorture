@@ -1,4 +1,4 @@
-# 🔥 ftorture — testeur 42 : libft, ft_printf & get_next_line
+# 🔥 ftorture — testeur 42 : libft, ft_printf, get_next_line & push_swap
 
 🇬🇧 [English version](README.md)
 
@@ -13,6 +13,7 @@ qu'il fuit et ce qu'il lit en dehors de sa mémoire.
 | **libft** | v19.3 | les 43 fonctions (parties 1, 2 et 3), ~400 tests + fuzzing |
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, largeur, `# +`, ~22 000 appels comparés à `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`, fichiers, stdin, pipe, erreurs de `read`, bonus multi-fd |
+| **push_swap** | v1.2 | erreurs, les 4 stratégies, `--bench`, seuils 100 / 500 nombres, valgrind, bonus `checker` |
 
 Inspiré de [Caesarovich/zft](https://github.com/Caesarovich/zft) : moteur C et
 orchestration Python modulaire. Dépendances : **Linux**, **Python 3.10+**, `cc`,
@@ -82,6 +83,8 @@ torture libft -f split,itoa -v       # quelques fonctions, avec tous les détail
 torture printf -f %d,"flag -"        # quelques conversions / flags
 torture printf -p 1                  # seulement la partie obligatoire
 torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
+torture push_swap ~/push_swap -e     # un push_swap (+ checker), avec l'efficacité
+torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les détails
 ```
 
 | Option | Effet |
@@ -90,13 +93,13 @@ torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
 | `-v`, `--verbose` | affiche le détail de chaque échec |
 | `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 50) |
 | `-t`, `--target N` | objectif d'efficacité en % (1–100) ; active `-e` |
-| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) |
-| `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl : 1 (obligatoire) ou 2 (bonus) |
+| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) · push_swap : `errors,simple,bench,perf100,checker…` |
+| `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl / push_swap : 1 (obligatoire) ou 2 (bonus) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
 | `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers et includes |
 | `--seed N` | graine du fuzzing (42 par défaut) |
-| `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl) |
+| `--timeout S` | timeout par test (3 s par défaut, 10 s pour gnl, 20 s pour push_swap) |
 | `--no-color` | sans couleurs |
 | `--lang en\|fr` | choisir la langue de sortie |
 | `--list-projects` | lister les projets et versions de sujet |
@@ -107,8 +110,8 @@ inutile de le lancer depuis le dépôt ftorture. Les chemins avec espaces sont a
 Le lanceur est uniquement en Python ; aucun wrapper shell n'est fourni.
 Conserve le dépôt : le lanceur installé y charge le code Python et les tests C.
 
-À la fin, ftorture lance le `make fclean` de ton projet (libft, ft_printf), même après
-une erreur ou un Ctrl-C : il ne reste ni `.o` ni archive. get_next_line est compilée dans le
+À la fin, ftorture lance le `make fclean` de ton projet (libft, ft_printf, push_swap), même après
+une erreur ou un Ctrl-C : il ne reste ni `.o`, ni archive, ni binaire. get_next_line est compilée dans le
 dossier de ftorture, donc ton dépôt reste propre. Le rapport complet sans couleurs est écrit dans
 `ftorture.log`, dans le dossier de ftorture, jamais dans ton projet.
 
@@ -235,6 +238,54 @@ donne une ligne du rapport : 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100 000,
 `BUFFER_SIZE=0` et `BUFFER_SIZE=10000000` comptent comme ▲ : le sujet pose la question
 (un buffer de 10 Mo sur la pile crashe), à toi de savoir l'expliquer.
 
+## push_swap
+
+Sujet v1.2 (le nouveau, avec `--simple`, `--medium`, `--complex`, `--adaptive` et
+`--bench`). ftorture lance `make`, puis `make bonus` s'il y a une règle bonus, et exécute
+**tes binaires** `./push_swap` et `./checker`. Chaque sortie est rejouée sur un simulateur
+de piles intégré : stdout ne doit contenir que des opérations (`sa sb ss pa pb ra rb rr
+rra rrb rrr`), une par ligne, qui laissent `a` trié et `b` vide.
+
+- **Arguments** : aucun argument (rien ne s'affiche), `INT_MIN` / `INT_MAX`, négatifs ;
+  ▲ une seule chaîne `"3 2 1"`, `+3`, `007`.
+- **Erreurs** (`Error\n` sur stderr, rien sur stdout) : pas un entier, `1.5`, `12a`, `+`,
+  `-`, dépassements (`2147483648`, `-2147483649`, 20 chiffres), doublons, avec ou sans
+  sélecteur ; ▲ `""`, `" "`, `+1 1`, `0 -0`, flag inconnu, deux sélecteurs.
+- **Déjà trié** : aucune opération, quelle que soit la stratégie.
+- **2 à 5 nombres** : toutes les permutations de 3, 4 et 5 nombres ; ▲ 3 nombres en 3 coups
+  max, 5 nombres en 12 coups max (ce que la correction attend), `2 1` en un `sa`.
+- **Chaque stratégie** (`--simple`, `--medium`, `--complex`, `--adaptive`) : 2 à 500 nombres,
+  aléatoires, inversés, `INT_MIN` / `INT_MAX`. `--adaptive` : une entrée par régime du sujet
+  (désordre < 0.2, 0.2–0.5, ≥ 0.5), et sans flag = `--adaptive`. ▲ **croissance** : le
+  nombre d'opérations est mesuré à 100 puis 400 nombres (`ops ~ n^e`) ; `--medium` doit
+  rester sous n^1.75, `--complex` et `--adaptive` sous n^1.4. ▲ les stratégies doivent
+  donner des sorties différentes.
+- **`--bench`** : stdout inchangé, sur stderr le désordre en % à 2 décimales (vérifié avec
+  le calcul du sujet), le nom de la stratégie et sa classe `O(...)`, le total et le compte
+  de chacune des 11 opérations ; ▲ `--simple --bench` dans l'autre ordre, `--bench` sur
+  une entrée triée.
+- **Performances** (stratégie par défaut, listes aléatoires) : 5 listes de 100 nombres
+  sous 2000 opérations et 5 de 500 sous 12000 (minimum du sujet) ; ▲ « bien » (< 1500 /
+  < 8000) et « excellent » (< 700 / < 5500) sur le pire cas de 10 / 5 listes.
+- **Bonus `checker`** : les exemples du sujet, `OK` / `KO` (b non vide, liste vide),
+  opérations sur piles vides, listes aléatoires des 11 opérations comparées au simulateur,
+  tri de 100 et 500 nombres, la sortie de ton push_swap, sans argument ; erreurs
+  (arguments invalides, doublons, dépassements, instructions `foo`, `SA`, `" sa"`, `"sa "`,
+  `rrrr`) ; ▲ ligne vide, `sa` sans `\n` final.
+- **Vérifications** : fichiers (`Makefile`, `*.c`, `*.h`, `README.md`, un dossier
+  `libft/`), règles `$(NAME) all clean fclean re` (+ `bonus`), `cc -Wall -Wextra -Werror`,
+  relink, `make clean` / `fclean` (`push_swap` et `checker`), README (algorithme, les 2
+  logins et la contribution de chacun), norminette, includes, uniquement `read`, `write`,
+  `malloc`, `free`, `exit` (`nm` sur les `.o` produits par ton Makefile), pas de variable
+  globale (ni `static` globale, ▲), et **valgrind** sur des tris, des erreurs, `--bench` et
+  le checker : fuite ou accès invalide = ✘, still reachable = ▲. Sans valgrind, la ligne
+  est sautée.
+
+Avec `-e`, l'efficacité de push_swap n'est pas un temps : c'est ta **moyenne
+d'opérations** sur 20 listes de 100 et 8 listes de 500 nombres, comparée au seuil
+« excellent » du sujet (100 % = 700 ou 5500 opérations). L'objectif à 50 % (défaut)
+correspond donc à 1400 et 11 000 opérations.
+
 ## Ta fonction face à la vraie
 
 Pour les entrées tordues (NULL, `n = 0`, dépassements…), ftorture lance **ta**
@@ -315,6 +366,7 @@ src/engine.c, memtrack.c, zft.h   moteur commun (fork, mémoire gardée, rapport
 src/libft/                        tests libft (t_part1-3.c) + références
 src/printf/                       tests ft_printf (t_printf.c, t_printf_bonus.c)
 src/gnl/                          tests get_next_line (t_gnl.c, t_gnl_bonus.c)
+src/push_swap/                    tests push_swap (t_push_swap.c, t_checker.c, simulateur ps.c)
 protos/                           prototypes attendus
 ```
 

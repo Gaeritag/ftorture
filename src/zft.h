@@ -124,6 +124,26 @@ extern t_cost			g_bench_cost;	/* set by COST() in the workload     */
 # define SINK(x) (g_bench_sink += (long)(x))
 # define COST(...) (g_bench_cost = (t_cost){__VA_ARGS__})
 
+/* SCORE(F) { ... SCORE_SET(ideal, real); } : an efficiency that is not a
+   time (push_swap: operations printed). Runs once, in a child; the result
+   is ideal / real, shown like a benchmark with --efficiency.               */
+void	zft_score_register(const char *func, void (*fn)(void),
+			const char *file, int line);
+extern double	g_score_ideal;
+extern double	g_score_real;
+# define SCORE(F) SCORE2(F, __COUNTER__)
+# define SCORE2(F, N) \
+	static void ZFT_CAT(zs_fn_, N)(void); \
+	__attribute__((constructor)) static void ZFT_CAT(zs_reg_, N)(void) \
+	{ zft_score_register(#F, ZFT_CAT(zs_fn_, N), __FILE__, __LINE__); } \
+	static void ZFT_CAT(zs_fn_, N)(void)
+# define SCORE_SET(ideal, real) (g_score_ideal = (ideal), g_score_real = (real))
+
+/* Directory of the project under test (--path).                           */
+const char	*zft_path(void);
+/* 1 when the report is in English (messages written by a suite).          */
+int			zft_en(void);
+
 /* ----------------------------------------------------------- assertions -- */
 __attribute__((noreturn)) void	zft_fail(const char *file, int line,
 			const char *expr, const char *expected, const char *got);

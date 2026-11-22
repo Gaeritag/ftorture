@@ -1,11 +1,11 @@
 """Subject checks for the two Makefile/archive projects."""
 import re
-import shlex
 from typing import TYPE_CHECKING
 
 from ..checks import CheckSession
 from ..runtime import Context, RunnerError
-from .common import allowed_path, check_files, check_readme, check_norm, check_symbols, symbols
+from .common import (allowed_path, check_compile_commands, check_files, check_readme, check_norm,
+                     check_symbols, symbols)
 from .includes import IncludeAnalysis
 from .prototypes import check_prototypes, expected_prototypes
 
@@ -43,24 +43,7 @@ def archive_checks(ctx: Context, project: "ArchiveProject", *, algorithm: bool =
                           "present" if bonus else "missing; bonus not tested",
                           "présente" if bonus else "absente ; bonus non testé")
         _, dry = make("-nB", "all")
-        commands = []
-        for line in dry.splitlines():
-            try:
-                args = shlex.split(line)
-            except ValueError:
-                continue
-            if "-c" in args and any(arg.endswith(".c") for arg in args):
-                commands.append(args)
-        if not commands:
-            session.check("WARN", "Compiler flags", "Flags de compilation", "no compile command detected", "aucune compilation détectée")
-        else:
-            flags_ok = all({"-Wall", "-Wextra", "-Werror"} <= set(args) for args in commands)
-            cc_ok = all(args[0].rsplit("/", 1)[-1] == "cc" for args in commands)
-            session.check("OK" if flags_ok else "KO", "Compiler flags", "Flags de compilation",
-                          "-Wall -Wextra -Werror required on every file", "-Wall -Wextra -Werror requis sur chaque fichier")
-            session.check("OK" if cc_ok else "KO", "Compiler", "Compilateur", "cc required by subject", "cc imposé par le sujet")
-            if any("-std=c99" in args for args in commands):
-                session.check("KO", "Flag -std=c99", "Flag -std=c99", "forbidden by subject", "interdit par le sujet")
+        check_compile_commands(session, dry)
         archive_status = "KO" if "libtool" in dry else "OK" if re.search(r"(^|[\s/])ar\s", dry, re.M) else "WARN"
         session.check(archive_status, "Archive", "Archive", "use ar, not libtool", "utiliser ar, pas libtool")
         project.build_archive(ctx)

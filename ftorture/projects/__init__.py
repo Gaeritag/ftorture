@@ -5,8 +5,9 @@ from .base import Project
 from .gnl import PROJECT as GNL
 from .libft import PROJECT as LIBFT
 from .printf import PROJECT as PRINTF
+from .push_swap import PROJECT as PUSH_SWAP
 
-PROJECTS: tuple[Project, ...] = (LIBFT, PRINTF, GNL)
+PROJECTS: tuple[Project, ...] = (LIBFT, PRINTF, GNL, PUSH_SWAP)
 
 
 def find(name: str) -> Project | None:

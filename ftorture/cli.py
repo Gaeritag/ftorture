@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.list_projects:
             for project in registry.projects:
                 label = " [CUSTOM]" if project.custom else ""
-                print(f"{project.key:8} {project.name:16} {project.subject}{label}")
+                print(f"{project.key:10} {project.name:16} {project.subject}{label}")
             return 0
         project = registry.find(args.target)
         if project is not None:

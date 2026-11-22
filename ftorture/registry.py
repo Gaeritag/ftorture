@@ -1,5 +1,6 @@
 """A single registry interface for bundled projects and user-owned test suites."""
 from pathlib import Path
+import re
 
 from .projects import PROJECTS
 from .projects.base import Project
@@ -20,7 +21,12 @@ class Registry:
         return next((project for project in self.projects if name in (project.key, *project.aliases)), None)
 
     def detect(self, directory: Path) -> Project | None:
-        priority = {"gnl": 0, "printf": 1, "libft": 2}
+        # push_swap first: its folder often holds a libft/ or an ft_printf.h too.
+        priority = {"push_swap": -1, "gnl": 0, "printf": 1, "libft": 2}
+        makefile = directory / "Makefile"
+        if makefile.is_file() and re.search(r"^\s*NAME\s*:?=\s*push_swap\s*$",
+                                            makefile.read_text(errors="replace"), re.M):
+            return next((project for project in self.projects if project.key == "push_swap"), None)
         return next((project for project in sorted(self.projects, key=lambda p: priority.get(p.key, 3))
                      if not project.custom and project.header and (directory / project.header).is_file()), None)
 

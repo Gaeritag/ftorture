@@ -3,6 +3,7 @@ import fnmatch
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 from collections.abc import Callable
 
@@ -26,6 +27,9 @@ def allowed_path(key: str, relative: str) -> bool:
         return True
     if key == "libft":
         return relative == "libft.h" or (len(path.parts) == 1 and fnmatch.fnmatchcase(relative, "ft_*.c"))
+    if key == "push_swap":
+        # Subject: Makefile, *.h, *.c (and a libft folder with its Makefile).
+        return path.suffix in (".c", ".h") or relative == "libft/Makefile"
     if key == "printf":
         return ((len(path.parts) <= 2 and path.suffix in (".c", ".h"))
                 or relative in ("libft/Makefile", "libft/README.md"))
@@ -132,3 +136,25 @@ def check_symbols(session: CheckSession, entries: list[tuple[str, str, str]], *,
     session.check("KO" if missing else "OK", "Mandatory functions", "Fonctions obligatoires",
                   f"{len(required) - len(missing)}/{len(required)} present" + (": missing " + ", ".join(missing) if missing else ""),
                   f"{len(required) - len(missing)}/{len(required)} présentes" + (" : absentes " + ", ".join(missing) if missing else ""))
+
+
+def check_compile_commands(session: CheckSession, dry: str) -> None:
+    """Flags and compiler of every `cc -c x.c` line printed by `make -nB`."""
+    commands = []
+    for line in dry.splitlines():
+        try:
+            args = shlex.split(line)
+        except ValueError:
+            continue
+        if "-c" in args and any(arg.endswith(".c") for arg in args):
+            commands.append(args)
+    if not commands:
+        session.check("WARN", "Compiler flags", "Flags de compilation", "no compile command detected", "aucune compilation détectée")
+    else:
+        flags_ok = all({"-Wall", "-Wextra", "-Werror"} <= set(args) for args in commands)
+        cc_ok = all(args[0].rsplit("/", 1)[-1] == "cc" for args in commands)
+        session.check("OK" if flags_ok else "KO", "Compiler flags", "Flags de compilation",
+                      "-Wall -Wextra -Werror required on every file", "-Wall -Wextra -Werror requis sur chaque fichier")
+        session.check("OK" if cc_ok else "KO", "Compiler", "Compilateur", "cc required by subject", "cc imposé par le sujet")
+        if any("-std=c99" in args for args in commands):
+            session.check("KO", "Flag -std=c99", "Flag -std=c99", "forbidden by subject", "interdit par le sujet")

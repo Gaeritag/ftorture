@@ -65,7 +65,7 @@ class Terminal:
                 else:
                     line += "  "
             self.write(line + self.reset + "\n")
-        subtitle = "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE"
+        subtitle = "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP"
         tag = self.t("> your code will talk", "> ton code va parler")
         if project:
             subtitle = f"{project.name.upper()} · {self.t('SUBJECT', 'SUJET')} v{project.subject} · LINUX"
@@ -73,7 +73,8 @@ class Terminal:
                 subtitle = f"[CUSTOM] {project.name}"
             tags = {"libft": ("> your libft will talk", "> ta libft va parler"),
                     "printf": ("> your printf will talk", "> ton printf va parler"),
-                    "gnl": ("> your gnl will talk", "> ta gnl va parler")}
+                    "gnl": ("> your gnl will talk", "> ta gnl va parler"),
+                    "push_swap": ("> your push_swap will talk", "> ton push_swap va parler")}
             tag = self.t(*tags.get(project.key, ("> your code will talk", "> ton code va parler")))
         self.write(f"   {self.medium}▚▚ {subtitle} ▞▞{self.reset}\n")
         self.write(f"   {self.ph}{tag}{self.reset}{self.escape('5')}{self.ph}_{self.reset}\n\n")
@@ -133,6 +134,8 @@ def choose_project(terminal: Terminal, registry: Registry):
         "libft": terminal.t("libft.a · 43 functions · parts 1, 2, 3", "libft.a · 43 fonctions · parties 1, 2, 3"),
         "printf": terminal.t("libftprintf.a · cspdiuxX% · bonus -0. width # +", "libftprintf.a · cspdiuxX% · bonus -0. largeur # +"),
         "gnl": "get_next_line · 14 BUFFER_SIZE · bonus multi-fd",
+        "push_swap": terminal.t("4 strategies · --bench · 100/500 numbers · bonus checker",
+                                "4 stratégies · --bench · 100/500 nombres · bonus checker"),
     }
     while True:
         terminal.heading("WHICH PROJECT TO TEST?", "QUEL PROJET ON TORTURE ?")
@@ -222,6 +225,9 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
         terminal.t("strict mode (-s): ▲ count as errors", "mode strict (-s) : les ▲ comptent comme erreurs"),
         terminal.t("verbose (-v): all failure details", "verbose (-v) : tous les détails des échecs"),
         terminal.t(
+            f"efficiency (-e): your operation count vs the subject's \"excellent\", target {options.efficiency_target}%",
+            f"efficacité (-e) : tes opérations face au seuil « excellent » du sujet, objectif {options.efficiency_target} %",
+        ) if project.key == "push_swap" else terminal.t(
             f"efficiency (-e): your time vs this machine's perfect time, target {options.efficiency_target}%",
             f"efficacité (-e) : ton temps face au temps parfait de la machine, objectif {options.efficiency_target} %",
         ),

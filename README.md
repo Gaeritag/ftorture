@@ -1,4 +1,4 @@
-# 🔥 ftorture — 42 tester: libft, ft_printf & get_next_line
+# 🔥 ftorture — 42 tester: libft, ft_printf, get_next_line & push_swap
 
 🇫🇷 [Version française](README.fr.md)
 
@@ -13,6 +13,7 @@ and what it reads outside its memory.
 | **libft** | v19.3 | all 43 functions (parts 1, 2 and 3), ~400 tests + fuzzing |
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, width, `# +`, ~22,000 calls compared with `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`s, files, stdin, pipe, `read` errors, multi-fd bonus |
+| **push_swap** | v1.2 | errors, the 4 strategies, `--bench`, 100 / 500 number thresholds, valgrind, `checker` bonus |
 
 Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft): a C test engine
 with modular Python orchestration. Requires **Linux**, **Python 3.10+**, `cc`,
@@ -84,6 +85,8 @@ torture libft -f split,itoa -v       # a few functions, with every detail
 torture printf -f %d,"flag -"        # a few conversions / flags
 torture printf -p 1                  # mandatory part only
 torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
+torture push_swap ~/push_swap -e     # a push_swap (+ checker), with efficiency
+torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 ```
 
 | Option | Effect |
@@ -92,13 +95,13 @@ torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
 | `-v`, `--verbose` | show the details of every failure |
 | `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
 | `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
-| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) |
-| `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl: 1 (mandatory) or 2 (bonus) |
+| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) · push_swap: `errors,simple,bench,perf100,checker…` |
+| `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl / push_swap: 1 (mandatory) or 2 (bonus) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
 | `--no-hidden` | ignore hidden files/folders in extra-file and include-use checks |
 | `--seed N` | fuzzing seed (default 42) |
-| `--timeout S` | per-test timeout (default 3 s, 10 s for gnl) |
+| `--timeout S` | per-test timeout (default 3 s, 10 s for gnl, 20 s for push_swap) |
 | `--no-color` | no colors |
 | `--lang en\|fr` | override the detected output language |
 | `--list-projects` | list supported project modules and subject versions |
@@ -109,8 +112,8 @@ you do not need to start it from the ftorture checkout. Paths containing spaces
 are supported. The launcher is Python-only; no shell wrappers are provided.
 Keep the checkout in place: the installed launcher loads its Python code and C suites.
 
-At the end, ftorture runs your project's `make fclean` (libft, ft_printf), even after an
-error or a Ctrl-C: no `.o` file or archive is left behind. get_next_line is compiled in the
+At the end, ftorture runs your project's `make fclean` (libft, ft_printf, push_swap), even after an
+error or a Ctrl-C: no `.o` file, archive or binary is left behind. get_next_line is compiled in the
 ftorture folder, so your repository stays clean. A full plain-text report is written to `ftorture.log`, in
 the ftorture folder, never inside your project.
 
@@ -247,6 +250,53 @@ is one line of the report: 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100,000,
 `BUFFER_SIZE=0` and `BUFFER_SIZE=10000000` count as ▲: the subject asks the question
 (a 10 MB buffer on the stack crashes); you need to be able to explain it.
 
+## push_swap
+
+Subject v1.2 (the new one, with `--simple`, `--medium`, `--complex`, `--adaptive` and
+`--bench`). ftorture runs `make`, then `make bonus` when there is a bonus rule, and executes
+**your binaries** `./push_swap` and `./checker`. Every output is replayed on a built-in
+stack simulator: stdout must hold only operations (`sa sb ss pa pb ra rb rr rra rrb rrr`),
+one per line, that leave `a` sorted and `b` empty.
+
+- **Arguments**: no argument (nothing is printed), `INT_MIN` / `INT_MAX`, negatives;
+  ▲ a single string `"3 2 1"`, `+3`, `007`.
+- **Errors** (`Error\n` on stderr, nothing on stdout): not an integer, `1.5`, `12a`, `+`,
+  `-`, overflows (`2147483648`, `-2147483649`, 20 digits), duplicates, with or without a
+  selector; ▲ `""`, `" "`, `+1 1`, `0 -0`, unknown flag, two selectors.
+- **Already sorted**: no operation, whatever the strategy.
+- **2 to 5 numbers**: every permutation of 3, 4 and 5 numbers; ▲ 3 numbers in at most 3
+  moves, 5 numbers in at most 12 (what the evaluation expects), `2 1` in one `sa`.
+- **Each strategy** (`--simple`, `--medium`, `--complex`, `--adaptive`): 2 to 500 numbers,
+  random, reversed, `INT_MIN` / `INT_MAX`. `--adaptive`: one input per regime of the subject
+  (disorder < 0.2, 0.2–0.5, ≥ 0.5), and no flag = `--adaptive`. ▲ **growth**: the operation
+  count is measured at 100 then 400 numbers (`ops ~ n^e`); `--medium` must stay under
+  n^1.75, `--complex` and `--adaptive` under n^1.4. ▲ the strategies must give different
+  outputs.
+- **`--bench`**: stdout unchanged; on stderr the disorder in % with 2 decimals (checked
+  against the subject's formula), the strategy name and its `O(...)` class, the total and
+  the count of each of the 11 operations; ▲ `--simple --bench` in the other order,
+  `--bench` on a sorted input.
+- **Performance** (default strategy, random lists): 5 lists of 100 numbers under 2000
+  operations and 5 of 500 under 12000 (the subject's minimum); ▲ "good" (< 1500 / < 8000)
+  and "excellent" (< 700 / < 5500) on the worst of 10 / 5 lists.
+- **`checker` bonus**: the subject's examples, `OK` / `KO` (b not empty, empty list),
+  operations on empty stacks, random lists of the 11 operations compared with the
+  simulator, sorting 100 and 500 numbers, your push_swap's output, no argument; errors
+  (invalid arguments, duplicates, overflows, instructions `foo`, `SA`, `" sa"`, `"sa "`,
+  `rrrr`); ▲ empty line, `sa` without a final `\n`.
+- **Checks**: files (`Makefile`, `*.c`, `*.h`, `README.md`, a `libft/` folder), rules
+  `$(NAME) all clean fclean re` (+ `bonus`), `cc -Wall -Wextra -Werror`, relink,
+  `make clean` / `fclean` (`push_swap` and `checker`), README (algorithm, both logins and
+  each one's contribution), norminette, includes, only `read`, `write`, `malloc`, `free`,
+  `exit` (`nm` on the `.o` files your Makefile made), no global variable (nor a `static`
+  global, ▲), and **valgrind** on sorts, errors, `--bench` and the checker: a leak or an
+  invalid access = ✘, still reachable = ▲. Without valgrind the line is skipped.
+
+With `-e`, push_swap's efficiency is not a time: it is your **average operation count**
+on 20 lists of 100 and 8 lists of 500 numbers, compared with the subject's "excellent"
+threshold (100 % = 700 or 5500 operations). The 50 % target (default) therefore means
+1400 and 11 000 operations.
+
 ## Your function vs the real one
 
 For twisted inputs (NULL, `n = 0`, overflows…), ftorture runs **your** function and the
@@ -323,6 +373,7 @@ src/engine.c, memtrack.c, zft.h   shared engine (fork, guarded memory, report)
 src/libft/                        libft tests (t_part1-3.c) + references
 src/printf/                       ft_printf tests (t_printf.c, t_printf_bonus.c)
 src/gnl/                          get_next_line tests (t_gnl.c, t_gnl_bonus.c)
+src/push_swap/                    push_swap tests (t_push_swap.c, t_checker.c, simulator ps.c)
 protos/                           expected prototypes
 ```
 

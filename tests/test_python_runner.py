@@ -249,6 +249,11 @@ class RunnerTests(unittest.TestCase):
             self.assertIsNone(detect(directory))
             (directory / "libft.h").touch()
             self.assertEqual(detect(directory).key, "libft")
+            # a push_swap folder often ships ft_printf.h or a libft: the Makefile decides
+            (directory / "ft_printf.h").touch()
+            (directory / "Makefile").write_text("NAME\t= push_swap\nall:\n")
+            self.assertEqual(detect(directory).key, "push_swap")
+        self.assertEqual(find("ps").key, "push_swap")
 
     def test_lock_prevents_concurrent_runs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -474,6 +479,52 @@ char *get_next_line(int fd) {
                                 if line.startswith("TOTAL:"))
             self.assertIn("0 failed, 0 speculative, 0 missing", total)
             self.assertEqual(result.stdout.count("RESULT"), 1)
+
+    def push_swap_fixture(self, directory: Path, broken: bool = False) -> None:
+        shutil.copytree(ROOT / "tests/fixtures/push_swap", directory, dirs_exist_ok=True)
+        if broken:
+            # drop the last operation of every long output: 100 numbers stay unsorted
+            (directory / "push_swap.h").write_text(
+                "#ifndef PUSH_SWAP_H\n# define PUSH_SWAP_H\n"
+                "# define BREAK_HERE if (na > 50 && outlen > 3) outlen -= 3;\n#endif\n")
+
+    def test_push_swap_good_broken_and_cleanup(self):
+        for broken in (False, True):
+            with self.subTest(broken=broken), tempfile.TemporaryDirectory(prefix="push swap '") as tmp:
+                directory = Path(tmp)
+                self.push_swap_fixture(directory, broken)
+                result = self.invoke("push_swap", directory, "--no-checks", "--lang", "en", "--no-color")
+                self.assertEqual(result.returncode, int(broken), result.stdout + result.stderr)
+                self.assertIn("PART 2 · Bonus · checker", result.stdout)
+                self.assertIn("100 random", result.stdout)
+                if broken:
+                    self.assertIn("not sorted after", result.stdout)
+                for name in ("push_swap", "checker", "push_swap.o", "checker_bonus.o"):
+                    self.assertFalse((directory / name).exists(), name)  # final make fclean
+
+    def test_push_swap_checks_and_efficiency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            self.push_swap_fixture(directory)
+            (directory / "notes.txt").write_text("not a submission file\n")
+            result = self.invoke("push_swap", directory, "--no-norm", "-e", "-f", "perf100,checker",
+                                 "--lang", "en", "--no-color")
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            # the fixture uses the libc (strtol, fprintf...): forbidden by the subject
+            for text in ("notes.txt", "Makefile rules", "Leaks (valgrind)", "strtol (checker_bonus.o, push_swap.o)",
+                         "Static globals", "EFFICIENCY", "⚡"):
+                self.assertIn(text, result.stdout)
+
+    def test_push_swap_without_bonus_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            self.push_swap_fixture(directory)
+            makefile = directory / "Makefile"
+            makefile.write_text(makefile.read_text().replace("bonus: checker\n", "").replace(" bonus ", " "))
+            result = self.invoke("push_swap", directory, "--no-checks", "-f", "errors", "--lang", "en", "--no-color")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("PART 2", result.stdout)
+            self.assertIn("Bonus not tested: no bonus rule.", result.stdout)
 
 
 if __name__ == "__main__":

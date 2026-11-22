@@ -94,6 +94,16 @@ static const char	*localize(const char *src)
 		{"NULL renvoyé", "NULL returned"},
 		{"alors qu'il reste des lignes", "while lines remain"},
 		{"pas de", "no"}, {"ni de", "or"},
+		/* push_swap */
+		{"nombres", "numbers"}, {"coups", "moves"}, {"aléatoires", "random"},
+		{"inversé", "reversed"}, {"trié", "sorted"},
+		{"désordre fort", "high disorder"}, {"désordre en", "disorder in"},
+		{"désordre", "disorder"}, {"croissance", "growth"},
+		{"différent de", "differs from"}, {"chaque opération", "each operation"},
+		{"total des opérations", "operation total"}, {"opérations", "operations"},
+		{"nom ", "name "}, {"(bien)", "(good)"}, {"rien", "nothing"},
+		{"non vide", "not empty"}, {"en moins", "missing"},
+		{"ligne vide", "empty line"}, {"flag", "flag"},
 		{NULL, NULL}
 	};
 	char *out;
@@ -178,6 +188,26 @@ static void	localize_project(void)
 			if (!strcmp(g_funcs[i].name, "pf_combo")) g_funcs[i].label = "combinations";
 			if (!strcmp(g_funcs[i].name, "pf_undef")) g_funcs[i].label = "undefined cases";
 		}
+	}
+	else if (!strcmp(g_proj.name, "push_swap"))
+	{
+		static const char	*en[][2] = {
+			{"args", "no arguments"}, {"errors", "errors"},
+			{"sorted", "already sorted"}, {"small", "2 to 5 numbers"},
+			{"simple", "--simple"}, {"medium", "--medium"},
+			{"complex", "--complex"}, {"adaptive", "--adaptive"},
+			{"bench", "--bench"}, {"perf100", "100 random"},
+			{"perf500", "500 random"}, {"checker", "checker"},
+			{"ck_errors", "checker errors"}, {NULL, NULL}};
+		int					k;
+
+		g_part_names[1] = "Mandatory · push_swap";
+		g_part_names[2] = "Bonus · checker";
+		g_proj.short_names[1] = "mandatory";
+		for (i = 0; i < g_proj.nfuncs; i++)
+			for (k = 0; en[k][0]; k++)
+				if (!strcmp(g_funcs[i].name, en[k][0]))
+					g_funcs[i].label = en[k][1];
 	}
 	else
 	{
@@ -844,7 +874,7 @@ static void	banner(void)
 		pixel_row(row, sizeof(row), "FTORTURE", i, scan[i], 22);
 		printf("   %s\n", row);
 	}
-	printf("   %s▚▚ %s ▞▞%s\n", C_PHM, L(g_proj.subtitle, "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE"), C_RST);
+	printf("   %s▚▚ %s ▞▞%s\n", C_PHM, L(g_proj.subtitle, "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP"), C_RST);
 	printf("   %s%s%s%s_%s\n\n", C_PH, L(g_proj.tagline, "> your code will talk"), C_RST,
 		o.color ? "\033[5m\033[38;5;46m" : "", C_RST);
 	printf("   %s%s%s %s · %s\n", C_PHD, L("projet", "project"), C_RST, g_proj.name, o.path);
@@ -1084,6 +1114,7 @@ typedef struct s_bench
 {
 	const char	*func;
 	void		(*fn)(long);
+	void		(*score)(void);	/* SCORE(): not a time                   */
 }	t_bench;
 
 typedef struct s_bres
@@ -1093,6 +1124,7 @@ typedef struct s_bres
 	int		bound;		/* 1: stopped by the time limit, real value lower  */
 	double	ideal;		/* perfect seconds per repetition                  */
 	double	real;		/* your seconds per repetition                     */
+	int		score;		/* SCORE(): ideal and real are not seconds         */
 }	t_bres;
 
 typedef struct s_bshm
@@ -1101,6 +1133,7 @@ typedef struct s_bshm
 	double	ft_start;	/* when your current run started (0: not running) */
 	long	n;			/* workload repetitions per run                   */
 	t_cost	cost;		/* declared by the workload                        */
+	double	ideal;		/* SCORE(): ideal value                            */
 }	t_bshm;
 
 #define BENCH_MAX 64
@@ -1124,7 +1157,29 @@ void	zft_bench_register(const char *func, void (*fn)(long),
 	(void)file;
 	(void)line;
 	if (g_nbench < BENCH_MAX)
-		g_benches[g_nbench++] = (t_bench){func, fn};
+		g_benches[g_nbench++] = (t_bench){func, fn, NULL};
+}
+
+double	g_score_ideal;
+double	g_score_real;
+
+void	zft_score_register(const char *func, void (*fn)(void),
+			const char *file, int line)
+{
+	(void)file;
+	(void)line;
+	if (g_nbench < BENCH_MAX)
+		g_benches[g_nbench++] = (t_bench){func, NULL, fn};
+}
+
+const char	*zft_path(void)
+{
+	return (o.path);
+}
+
+int	zft_en(void)
+{
+	return (o.english);
 }
 
 static double	bnow(void)
@@ -1326,7 +1381,9 @@ static t_bres	*run_bench(const t_bench *b, const char *label)
 	memset(r, 0, sizeof(*r));
 	copy_trunc(r->label, sizeof(r->label), label);
 	r->pct = -1;
-	hw_calibrate();
+	r->score = b->score != NULL;
+	if (!b->score)
+		hw_calibrate();
 	if (!g_bshm)
 		g_bshm = mmap(NULL, sizeof(t_bshm), PROT_READ | PROT_WRITE,
 				MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -1354,6 +1411,16 @@ static t_bres	*run_bench(const t_bench *b, const char *label)
 		g_fail_at = 0;
 		g_armed = 0;
 		zsrand(o.seed);
+		if (b->score)
+		{
+			g_score_ideal = 0;
+			g_score_real = 0;
+			b->score();
+			g_bshm->ideal = g_score_ideal;
+			g_bshm->tft = g_score_real;
+			g_bshm->n = 1;
+			_exit(0);
+		}
 		/* warm-up: builds the fixtures and declares the cost */
 		memset(&g_bench_cost, 0, sizeof(g_bench_cost));
 		t = bench_once(b->fn, 1);
@@ -1380,8 +1447,8 @@ static t_bres	*run_bench(const t_bench *b, const char *label)
 
 		if (w == pid || (w < 0 && errno != EINTR))
 			break ;
-		if ((fs > 0 && bnow() - fs > BENCH_LIMIT)
-			|| bnow() - start > 30.0)
+		if ((!b->score && fs > 0 && bnow() - fs > BENCH_LIMIT)
+			|| bnow() - start > (b->score ? 120.0 : 30.0))
 		{
 			kill(pid, SIGKILL);
 			while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
@@ -1396,7 +1463,7 @@ static t_bres	*run_bench(const t_bench *b, const char *label)
 		}
 		usleep(2000);
 	}
-	ideal = ideal_time(&g_bshm->cost);
+	ideal = b->score ? g_bshm->ideal : ideal_time(&g_bshm->cost);
 	r->ideal = ideal;
 	r->real = g_bshm->tft;
 	if (getenv("FTORTURE_BENCH_DEBUG"))
@@ -1437,6 +1504,11 @@ static void	print_eff(const t_bres *r)
 		if (r->pct < 0)
 			fprintf(g_log, L("%s : efficacité non mesurée (crash)\n",
 				"%s: efficiency not measured (crash)\n"), r->label);
+		else if (r->score)
+			fprintf(g_log, L("%s : efficacité %d%% (objectif %d%%, référence "
+				"%.0f, le tien %.0f)\n", "%s: efficiency %d%% (target %d%%, "
+				"reference %.0f, yours %.0f)\n"), r->label, r->pct,
+				o.eff_target, r->ideal, r->real);
 		else
 			fprintf(g_log, L("%s : efficacité %s%d%% (objectif %d%%, temps "
 				"parfait %.2f µs, le tien %s%.2f µs)\n", "%s: efficiency %s%d%% "
@@ -1730,7 +1802,13 @@ static void	eff_summary(void)
 		return ;
 	}
 	pct = (int)(exp(sum / n) + 0.5);
-	bw = g_inner - 2 - 38;
+	{
+		char	tl[64];
+
+		/* "EFFICACITÉ" + 9 spaces + ▕▏ + " 100%  " + the target label */
+		snprintf(tl, sizeof(tl), L("objectif %d%%", "target %d%%"), o.eff_target);
+		bw = g_inner - 2 - 28 - vis_len(tl);
+	}
 	if (bw < 6)
 		bw = 6;
 	eff_gauge(g, sizeof(g), pct, bw);
@@ -1776,7 +1854,9 @@ static void	eff_summary(void)
 	else
 		box_line(L("%s  %d/%d mesure(s) au-dessus de l'objectif%s", "%s  %d/%d measurement(s) above target%s"),
 			C_GRN, n, n, C_RST);
-	if (g_hw_ok)
+	for (i = 0; i < g_nbr && g_br[i].score; i++)
+		;
+	if (g_hw_ok && i < g_nbr)
 		box_line(L("%s  coûts mesurés ici : octet %.1f ns · malloc %.0f ns · "
 			"syscall %.0f ns%s", "%s  costs measured here: byte %.1f ns · "
 			"malloc %.0f ns · syscall %.0f ns%s"),

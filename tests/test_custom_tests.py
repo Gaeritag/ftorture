@@ -51,7 +51,7 @@ class CustomTests(unittest.TestCase):
         project = self.project()
         registry = load_registry(self.manifests)
         self.assertEqual(registry.find("custom-smoke"), project)
-        self.assertEqual(registry.projects[:3], PROJECTS)
+        self.assertEqual(registry.projects[:len(PROJECTS)], PROJECTS)
         self.assertIsNone(registry.detect(self.directory))
         self.assertFalse((self.root / "build").exists())
         with self.assertRaisesRegex(RunnerError, "Duplicate"):
