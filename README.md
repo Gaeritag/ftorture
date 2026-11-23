@@ -101,6 +101,7 @@ torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 | `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: any BUFFER_SIZEs, `1,42,77,100k,def` · push_swap: `errors,simple,bench,perf100,checker…` |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl / push_swap: 1 (mandatory) or 2 (bonus) |
 | `--file F\|SIZE` | gnl: test only your file (compared line by line with its content), or a generated file of that size (`64k`, `2M`, 256M max); repeatable, comma-separated |
+| `-c`, `--chill` | downgrade style/hygiene check KOs (norminette, extra files, README, includes, Makefile hygiene) to warnings (▲) |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
 | `--no-hidden` | ignore hidden files/folders in extra-file, include-use and norminette checks |

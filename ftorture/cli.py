@@ -93,6 +93,9 @@ def parser(lang: str) -> argparse.ArgumentParser:
     result.add_argument("-p", "--part", type=positive, help=t("test only part N", "tester seulement la partie N"))
     result.add_argument("--seed", type=unsigned, default=42, help=t("random seed (default: 42)", "graine aléatoire (défaut : 42)"))
     result.add_argument("--timeout", type=positive, help=t("seconds per C test", "secondes par test C"))
+    result.add_argument("-c", "--chill", action="store_true", help=t(
+        "downgrade style/hygiene check KOs to warnings",
+        "passer les vérifications style/hygiène KO en avertissements"))
     result.add_argument("--no-checks", action="store_true", help=t("skip subject checks", "ignorer les vérifications du sujet"))
     result.add_argument("--no-norm", action="store_true", help=t("skip norminette", "ignorer norminette"))
     result.add_argument("--no-hidden", action="store_true", help=t("ignore hidden files and folders", "ignorer les fichiers et dossiers cachés"))
@@ -166,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             directory = Path(args.target or ".").expanduser().resolve()
         if not directory.is_dir():
             raise RunnerError(f"{directory}: " + text(lang, "directory not found", "dossier introuvable"))
-        options = Options(directory=directory, lang=lang, checks=not args.no_checks,
+        options = Options(directory=directory, lang=lang, checks=not args.no_checks, chill=args.chill,
                           norm=not args.no_norm, speculative=args.speculative, verbose=args.verbose,
                           efficiency=args.efficiency or args.efficiency_target is not None,
                           efficiency_target=50 if args.efficiency_target is None else args.efficiency_target,

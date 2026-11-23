@@ -99,6 +99,7 @@ torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les déta
 | `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : n'importe quels BUFFER_SIZE, `1,42,77,100k,def` · push_swap : `errors,simple,bench,perf100,checker…` |
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl / push_swap : 1 (obligatoire) ou 2 (bonus) |
 | `--file F\|TAILLE` | gnl : ne teste que ton fichier (comparé ligne à ligne à son contenu), ou un fichier généré de cette taille (`64k`, `2M`, 256M max) ; répétable, séparé par des virgules |
+| `-c`, `--chill` | passe les vérifications style/hygiène KO (norminette, fichiers en trop, README, includes, hygiène Makefile) en avertissements (▲) |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
 | `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers, includes et norminette |

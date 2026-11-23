@@ -232,9 +232,10 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
             f"efficacité (-e) : ton temps face au temps parfait de la machine, objectif {options.efficiency_target} %",
         ),
         terminal.t("checks (Makefile, nm, prototypes, README…)", "vérifications (Makefile, nm, prototypes, README…)"),
+        terminal.t("chill mode (-c): style/hygiene check KOs become ▲", "mode chill (-c) : les vérifs style/hygiène KO deviennent ▲"),
         "norminette", terminal.t("ignore hidden files (--no-hidden)", "ignorer les fichiers cachés (--no-hidden)"),
     ]
-    keys = ["speculative", "verbose", "efficiency", "checks", "norm", "ignore_hidden"]
+    keys = ["speculative", "verbose", "efficiency", "checks", "chill", "norm", "ignore_hidden"]
     if project.custom:
         # Subject/norm/include switches have no meaning for user command suites.
         labels, keys = labels[:2], keys[:2]
@@ -285,6 +286,8 @@ def run_header(project, options: Options) -> None:
     terminal.banner(project)
     mode = terminal.t("strict (-s): ▲ count as errors", "strict (-s) : les ▲ comptent comme erreurs") if options.speculative else terminal.t(
         "normal: ▲ are warnings (-s to count them)", "normal : ▲ = avertissements (-s pour les compter)")
+    if options.chill:
+        mode += terminal.t(" · chill (-c): hygiene KOs -> ▲", " · chill (-c) : hygiène KO -> ▲")
     for label, value in ((terminal.t("project", "projet"), project.name),
                          (terminal.t("path", "chemin"), options.directory), ("mode  ", mode), ("seed  ", options.seed)):
         terminal.write(f"   {terminal.dark}{label}{terminal.reset} {value}\n")

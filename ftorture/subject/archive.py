@@ -36,7 +36,7 @@ def archive_checks(ctx: Context, project: "ArchiveProject", *, algorithm: bool =
             missing.append("$(NAME)")
         session.check("KO" if missing else "OK", "Makefile rules", "Règles Makefile",
                       "missing: " + ", ".join(missing) if missing else "$(NAME) all clean fclean re",
-                      "manquantes : " + ", ".join(missing) if missing else "$(NAME) all clean fclean re")
+                      "manquantes : " + ", ".join(missing) if missing else "$(NAME) all clean fclean re", soft=True)
         bonus = project.has_bonus(ctx) if project.key == "printf" else False
         if project.key == "printf":
             session.check("OK" if bonus else "SKIP", "Bonus rule", "Règle bonus",
@@ -45,12 +45,12 @@ def archive_checks(ctx: Context, project: "ArchiveProject", *, algorithm: bool =
         _, dry = make("-nB", "all")
         check_compile_commands(session, dry)
         archive_status = "KO" if "libtool" in dry else "OK" if re.search(r"(^|[\s/])ar\s", dry, re.M) else "WARN"
-        session.check(archive_status, "Archive", "Archive", "use ar, not libtool", "utiliser ar, pas libtool")
+        session.check(archive_status, "Archive", "Archive", "use ar, not libtool", "utiliser ar, pas libtool", soft=True)
         project.build_archive(ctx)
         _, output = make("-n", "all")
         _, output_archive = make("-n", project.archive)
         session.check("KO" if relink(output + output_archive) else "OK", "Relink", "Relink",
-                      "make must not rebuild unchanged files", "make ne doit pas recompiler sans changement")
+                      "make must not rebuild unchanged files", "make ne doit pas recompiler sans changement", soft=True)
         if bonus:
             try:
                 project.build_archive(ctx, "bonus")
@@ -59,16 +59,17 @@ def archive_checks(ctx: Context, project: "ArchiveProject", *, algorithm: bool =
             else:
                 _, output = make("-n", "bonus")
                 session.check("KO" if relink(output) else "OK", "Bonus relink", "Relink bonus",
-                              "make bonus must not rebuild unchanged files", "make bonus ne doit pas recompiler sans changement")
+                              "make bonus must not rebuild unchanged files", "make bonus ne doit pas recompiler sans changement",
+                              soft=True)
         project.build_archive(ctx)
         clean_status, _ = make("clean")
         objects = list(ctx.options.directory.rglob("*.o"))
         clean_result = "KO" if clean_status or objects else "WARN" if not archive.is_file() else "OK"
         session.check(clean_result, "make clean", "make clean", "must remove objects and keep archive",
-                      "doit supprimer les objets et garder l'archive")
+                      "doit supprimer les objets et garder l'archive", soft=True)
         fclean_status, _ = make("fclean")
         session.check("KO" if fclean_status or archive.exists() else "OK", "make fclean", "make fclean",
-                      "must remove archive", "doit supprimer l'archive")
+                      "must remove archive", "doit supprimer l'archive", soft=True)
         project.build_archive(ctx)
         check_readme(session, algorithm=algorithm)
         report.section("CODE")

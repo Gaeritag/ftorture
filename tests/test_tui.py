@@ -135,7 +135,7 @@ class TuiTests(unittest.TestCase):
             session.send(b"\n")
             session.expect("Entrée lancer · q quitter")
             # Launch is selected initially. Wrap through every checkbox and toggle it.
-            session.send(b"j j j j j j j\n")
+            session.send(b"j j j j j j j j\n")
             result = session.expect("SELECTED:")
             payload = session.expect("\n").strip()
             options = json.loads(payload)
@@ -143,12 +143,28 @@ class TuiTests(unittest.TestCase):
             self.assertEqual(options["directory"], tmp)
             self.assertEqual(options["seed"], 17)
             self.assertEqual(options["functions"], "42")
-            for key in ("speculative", "verbose", "efficiency", "ignore_hidden"):
+            for key in ("speculative", "verbose", "efficiency", "chill", "ignore_hidden"):
                 self.assertTrue(options[key])
             self.assertEqual(options["efficiency_target"], 50)
             self.assertFalse(options["checks"])
             self.assertFalse(options["norm"])
             self.assertNotIn("\033[38;", result)
+            session.finish()
+
+    def test_chill_flag_initializes_options_menu(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "get_next_line.h").touch()
+            session = self.session(tmp, ("--lang", "en", "--no-color", "-c"))
+            session.expect("(current directory: gnl detected)")
+            session.send(b"\n")
+            session.expect("path : ")
+            session.send(b"\n")
+            session.expect("[■] chill mode (-c)")
+            session.expect("Enter start · q quit")
+            session.send(b"\n")
+            session.expect("SELECTED:")
+            options = json.loads(session.expect("\n").strip())
+            self.assertTrue(options["chill"])
             session.finish()
 
     def test_efficiency_target_initializes_options_menu(self):

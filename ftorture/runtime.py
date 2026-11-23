@@ -20,6 +20,7 @@ class Options:
     directory: Path
     lang: str = "en"
     checks: bool = True
+    chill: bool = False
     norm: bool = True
     speculative: bool = False
     verbose: bool = False
