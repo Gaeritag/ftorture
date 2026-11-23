@@ -161,6 +161,27 @@ class FilePolicyTests(unittest.TestCase):
             self.assertTrue(any(record.startswith("C|WARN|Helper functions|") for record in records))
             self.assertTrue(any("printf" in record for record in records))
 
+    def test_chill_mode_downgrades_hygiene_checks_but_keeps_hard_checks_ko(self):
+        with session_for("libft") as (session, student):
+            session.ctx.options = replace(session.ctx.options, chill=True, norm=True)
+            (student / "extra.py").touch()
+            (student / "ft_strlen.c").write_text("#include <stdio.h>\nint f(void) { return 0; }\n")
+            check_files(session, lambda path: allowed_path("libft", path))
+            check_readme(session, algorithm=True)
+            with patch("ftorture.subject.common.shutil.which", return_value="/norminette"), \
+                    patch.object(session, "capture", return_value=(1, "file.c: Error!\nError: BAD_STYLE\n")):
+                check_norm(session)
+            IncludeAnalysis(session).run()
+            entries = [("T", "ft_strlen", "libft.a:ft_strlen.o"),
+                       ("U", "printf", "libft.a:ft_strlen.o"), ("D", "global", "libft.a:ft_strlen.o")]
+            check_symbols(session, entries, allowed={"malloc", "free", "write"},
+                          required=["ft_strlen", "ft_split"], libft=True)
+            records = session.report.records
+            for label in ("Extra files", "README.md", "Norminette", "Includes"):
+                self.assertTrue(any(record.startswith(f"C|WARN|{label}|") for record in records), records)
+            for label in ("External functions", "Global variables", "Mandatory functions"):
+                self.assertTrue(any(record.startswith(f"C|KO|{label}|") for record in records), records)
+
 
 class LexerTests(unittest.TestCase):
     def test_comments_and_strings_do_not_justify_includes(self):
@@ -274,6 +295,24 @@ class MakefileChecksTests(unittest.TestCase):
                         self.assertTrue(any(record.startswith(f"C|OK|{label}|") for record in records), records)
                 finally:
                     LIBFT.cleanup(session.ctx)
+
+    def test_chill_mode_downgrades_makefile_hygiene_to_warn(self):
+        with session_for("libft") as (session, student):
+            session.ctx.options = replace(session.ctx.options, chill=True)
+            (student / "libft.h").write_text("#include <stddef.h>\nsize_t ft_strlen(const char *s);\n")
+            (student / "ft_strlen.c").write_text(
+                '#include "libft.h"\nsize_t ft_strlen(const char *s) { size_t n = 0; while (s[n]) n++; return n; }\n')
+            (student / "Makefile").write_text(
+                "NAME = libft.a\nall: $(NAME)\n$(NAME): ft_strlen.o\n\tar rcs $@ $<\n"
+                "ft_strlen.o: ft_strlen.c\n\tcc -c $< -o $@\n"
+                "clean:\n\ttrue\nfclean: clean\n\trm -f $(NAME)\nre: fclean all\n.PHONY: $(NAME)\n")
+            try:
+                archive_checks(session.ctx, LIBFT, linked_list=True)
+                records = session.ctx.checks_file.read_text().splitlines()
+                for label in ("Compiler flags", "Relink", "make clean", "README.md"):
+                    self.assertTrue(any(record.startswith(f"C|WARN|{label}|") for record in records), records)
+            finally:
+                LIBFT.cleanup(session.ctx)
 
 
 if __name__ == "__main__":

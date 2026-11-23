@@ -117,14 +117,14 @@ def check_files(session: CheckSession, allowed: Callable[[str], bool]) -> None:
     note_fr = f" ({len(skipped)} ignorés via .gitignore)" if skipped else ""
     session.check("KO" if bad else "OK", "Extra files", "Fichiers en trop",
                   (f"{len(bad)} unexpected files" if bad else "none") + note_en,
-                  (f"{len(bad)} fichiers inattendus" if bad else "aucun") + note_fr)
+                  (f"{len(bad)} fichiers inattendus" if bad else "aucun") + note_fr, soft=True)
     session.details(bad)
 
 
 def check_readme(session: CheckSession, *, algorithm: bool = False) -> None:
     path = session.ctx.options.directory / "README.md"
     if not path.is_file():
-        session.check("KO", "README.md", "README.md", "missing (required by subject)", "absent (obligatoire)")
+        session.check("KO", "README.md", "README.md", "missing (required by subject)", "absent (obligatoire)", soft=True)
         return
     content = path.read_text(errors="replace")
     first = content.splitlines()[0] if content.splitlines() else ""
@@ -135,7 +135,7 @@ def check_readme(session: CheckSession, *, algorithm: bool = False) -> None:
         missing.append(session.text("algorithm explanation", "explication de l'algorithme"))
     if not re.fullmatch(r"([*_])This project has been created as part of the 42 curriculum by [^*_]+\1\s*", first):
         session.check("KO", "README.md", "README.md", "first line must be the italic 42 curriculum attribution",
-                      "la première ligne doit être l'attribution 42 en italique")
+                      "la première ligne doit être l'attribution 42 en italique", soft=True)
     elif missing:
         session.check("WARN", "README.md", "README.md", "missing: " + ", ".join(missing),
                       "manquant : " + ", ".join(missing))
@@ -163,7 +163,7 @@ def check_norm(session: CheckSession) -> None:
         bad = bool(status or errors or "Error!" in output)
         session.check("KO" if bad else "OK", "Norminette", "Norminette",
                       f"{len(errors)} errors; see checks/ logs" if bad else "no errors",
-                      f"{len(errors)} erreurs ; voir checks/" if bad else "aucune erreur")
+                      f"{len(errors)} erreurs ; voir checks/" if bad else "aucune erreur", soft=True)
         if bad:
             session.details(errors or output.splitlines(), 6)
 
@@ -223,7 +223,7 @@ def check_compile_commands(session: CheckSession, dry: str) -> None:
         flags_ok = all({"-Wall", "-Wextra", "-Werror"} <= set(args) for args in commands)
         cc_ok = all(args[0].rsplit("/", 1)[-1] == "cc" for args in commands)
         session.check("OK" if flags_ok else "KO", "Compiler flags", "Flags de compilation",
-                      "-Wall -Wextra -Werror required on every file", "-Wall -Wextra -Werror requis sur chaque fichier")
-        session.check("OK" if cc_ok else "KO", "Compiler", "Compilateur", "cc required by subject", "cc imposé par le sujet")
+                      "-Wall -Wextra -Werror required on every file", "-Wall -Wextra -Werror requis sur chaque fichier", soft=True)
+        session.check("OK" if cc_ok else "KO", "Compiler", "Compilateur", "cc required by subject", "cc imposé par le sujet", soft=True)
         if any("-std=c99" in args for args in commands):
-            session.check("KO", "Flag -std=c99", "Flag -std=c99", "forbidden by subject", "interdit par le sujet")
+            session.check("KO", "Flag -std=c99", "Flag -std=c99", "forbidden by subject", "interdit par le sujet", soft=True)

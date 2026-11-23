@@ -210,5 +210,6 @@ class IncludeAnalysis:
                     bad.append(prefix + self.session.text(" unused", " inutilisé"))
         self.session.check("SKIP" if not total else "KO" if bad else "OK", "Includes", "Includes",
                            f"{len(bad)}/{total} unused or duplicate includes" if bad else f"{total} includes used",
-                           f"{len(bad)}/{total} includes inutiles ou dupliqués" if bad else f"{total} includes utilisés")
+                           f"{len(bad)}/{total} includes inutiles ou dupliqués" if bad else f"{total} includes utilisés",
+                           soft=True)
         self.session.details(bad)

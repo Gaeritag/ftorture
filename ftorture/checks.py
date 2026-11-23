@@ -73,7 +73,9 @@ class CheckSession:
                              *flags, "-x", "c", path], name=name)
 
     def check(self, status: str, en_label: str, fr_label: str,
-              en_detail: str = "", fr_detail: str = "") -> None:
+              en_detail: str = "", fr_detail: str = "", *, soft: bool = False) -> None:
+        if soft and status == "KO" and self.ctx.options.chill:
+            status = "WARN"
         self.report.check(status, self.text(en_label, fr_label), self.text(en_detail, fr_detail))
 
     def details(self, values: list[str], limit: int = 12) -> None:

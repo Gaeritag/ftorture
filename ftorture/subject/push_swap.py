@@ -122,7 +122,7 @@ def push_swap_checks(ctx: Context, project: "PushSwapProject") -> None:
             missing.append("$(NAME)")
         session.check("KO" if missing else "OK", "Makefile rules", "Règles Makefile",
                       "missing: " + ", ".join(missing) if missing else "$(NAME) all clean fclean re",
-                      "manquantes : " + ", ".join(missing) if missing else "$(NAME) all clean fclean re")
+                      "manquantes : " + ", ".join(missing) if missing else "$(NAME) all clean fclean re", soft=True)
         bonus = project.has_bonus(ctx)
         session.check("OK" if bonus else "SKIP", "Bonus rule", "Règle bonus",
                       "present (checker)" if bonus else "missing; checker not tested",
@@ -132,7 +132,7 @@ def push_swap_checks(ctx: Context, project: "PushSwapProject") -> None:
         project.build(ctx)
         _, output = make("-n", "all")
         session.check("KO" if relink(output) else "OK", "Relink", "Relink",
-                      "make must not rebuild unchanged files", "make ne doit pas recompiler sans changement")
+                      "make must not rebuild unchanged files", "make ne doit pas recompiler sans changement", soft=True)
         if bonus:
             try:
                 project.build(ctx, "bonus")
@@ -144,17 +144,17 @@ def push_swap_checks(ctx: Context, project: "PushSwapProject") -> None:
                 _, output = make("-n", "bonus")
                 session.check("KO" if relink(output) else "OK", "Bonus relink", "Relink bonus",
                               "make bonus must not rebuild unchanged files",
-                              "make bonus ne doit pas recompiler sans changement")
+                              "make bonus ne doit pas recompiler sans changement", soft=True)
         clean_status, _ = make("clean")
         left = built()
         session.check("KO" if clean_status or left else "WARN" if not (directory / "push_swap").is_file() else "OK",
                       "make clean", "make clean", "must remove objects and keep push_swap",
-                      "doit supprimer les objets et garder push_swap")
+                      "doit supprimer les objets et garder push_swap", soft=True)
         fclean_status, _ = make("fclean")
         binaries = [name for name in ("push_swap", "checker") if (directory / name).exists()]
         session.check("KO" if fclean_status or binaries else "OK", "make fclean", "make fclean",
                       "must remove push_swap" + (" and checker" if bonus else ""),
-                      "doit supprimer push_swap" + (" et checker" if bonus else ""))
+                      "doit supprimer push_swap" + (" et checker" if bonus else ""), soft=True)
         check_readme(session, algorithm=True)
         readme_group(session)
         report.section("CODE")
