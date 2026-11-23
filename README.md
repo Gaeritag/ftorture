@@ -85,6 +85,9 @@ torture libft -f split,itoa -v       # a few functions, with every detail
 torture printf -f %d,"flag -"        # a few conversions / flags
 torture printf -p 1                  # mandatory part only
 torture gnl -f 1,42,9999             # only these BUFFER_SIZEs
+torture gnl -f 3,77,4096             # any BUFFER_SIZE, even outside the list
+torture gnl -f 1,42 --file mine.txt  # only your file, with these BUFFER_SIZEs
+torture gnl --file 64k,2M            # generated files of 64 KB and 2 MB
 torture push_swap ~/push_swap -e     # a push_swap (+ checker), with efficiency
 torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 ```
@@ -95,8 +98,9 @@ torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 | `-v`, `--verbose` | show the details of every failure |
 | `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
 | `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
-| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: `1,42,def` (BUFFER_SIZE) · push_swap: `errors,simple,bench,perf100,checker…` |
+| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: any BUFFER_SIZEs, `1,42,77,100k,def` · push_swap: `errors,simple,bench,perf100,checker…` |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl / push_swap: 1 (mandatory) or 2 (bonus) |
+| `--file F\|SIZE` | gnl: test only your file (compared line by line with its content), or a generated file of that size (`64k`, `2M`, 256M max); repeatable, comma-separated |
 | `--no-checks` | skip Makefile / norm / nm / prototype checks |
 | `--no-norm` | skip norminette |
 | `--no-hidden` | ignore hidden files/folders in extra-file, include-use and norminette checks |
@@ -251,6 +255,21 @@ is one line of the report: 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100,000,
   `-Wall -Wextra -Werror -D BUFFER_SIZE=42` **and without `-D`**, only `read`, `malloc`,
   `free` (`lseek` and the libft are forbidden), no global variable, norminette,
   prototype, README with the algorithm.
+
+**Any buffer size, your own files**: `-f` takes any list of `BUFFER_SIZE`s
+(`3,77,4096`, `100k` = 100 000, `10M`, `def`); a size outside the usual list gets its own
+line (8 at most) and runs in the bonus too. `--file` replaces the usual tests with your
+inputs: a text file of yours, read line by line and compared with its content, or a size
+(`64k`, `2M`) that generates random lines of 0 to 200 characters, one of 10 000, the last
+one without `\n`. With `--file`, the default timeout grows with the file size and shrinks
+with the `BUFFER_SIZE` (10 s + ~10 µs per `read()`, 10 min at most); `--timeout` overrides it.
+
+**Small `BUFFER_SIZE`s without waiting 10 minutes**: very long lines (100 000 and 300 000
+characters) are cut to 4096 `read()` calls, so 4096 characters with `BUFFER_SIZE=1`, still
+far beyond the buffer. A stash rebuilt by a `strjoin` after every `read()` is quadratic:
+`BUFFER_SIZE=1` used to spend minutes there and end in `T`. The real 100 000 character line
+is kept in a ▲ "in less than 3 s" test that stops after 3 s and says why, and `-e` measures
+that cost.
 
 `BUFFER_SIZE=0` and `BUFFER_SIZE=10000000` count as ▲: the subject asks the question
 (a 10 MB buffer on the stack crashes); you need to be able to explain it.

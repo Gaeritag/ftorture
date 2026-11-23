@@ -7,12 +7,20 @@
 /* ************************************************************************** */
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include "gnl.h"
 
 /* BUFFER_SIZE used to build lines around the buffer size */
 #define BS (Z_BS > 0 ? Z_BS : 42)
 /* sizes that stay reasonable even with BUFFER_SIZE=10000000 */
 #define SMALL_BS (Z_BS > 0 && Z_BS <= 100000)
+/* Very long lines are cut to 4096 read() calls: with BUFFER_SIZE=1, a stash
+   rebuilt by a strjoin after every read() is quadratic (100 000 characters
+   take minutes). 4096 reads still check the accumulation; the "too slow"
+   test below and -e report the cost instead of a timeout.               */
+#define READS_MAX 4096
+#define LONG(n) ((size_t)(n) < (size_t)BS * READS_MAX ? (size_t)(n) \
+	: (size_t)BS * READS_MAX)
 
 #define FILE_TEST(NAME, DATA) \
 TEST(GNL_SUITE, NAME) \
@@ -113,7 +121,29 @@ TEST(GNL_SUITE, "lignes de 2 x BUFFER_SIZE et plus")
 	LEN(3 * BS + 7, 1, 2);
 }
 TEST(GNL_SUITE, "ligne longue (10 000 caractères)")   { LEN(10000, 1, 2); LEN(10000, 0, 1); }
-TEST(GNL_SUITE, "ligne très longue (100 000)")        { LEN(100000, 1, 1); }
+TEST(GNL_SUITE, "ligne très longue (jusqu'à 100 000)") { LEN(LONG(100000), 1, 1); }
+
+/* the real 100 000 characters, stopped after 3 s instead of a timeout     */
+static void	too_slow(int sig)
+{
+	(void)sig;
+	zft_failf(__FILE__, __LINE__, "%s", zft_en()
+		? "not done after 3 s: a 100 000 character line costs too much (a "
+		"stash rebuilt by a strjoin after every read() is quadratic; the "
+		"same line shorter passed above, see the efficiency with -e)"
+		: "pas fini en 3 s : une ligne de 100 000 caractères coûte trop cher "
+		"(une stash refaite par un strjoin après chaque read() est "
+		"quadratique ; la même ligne plus courte est passée au-dessus, "
+		"regarde l'efficacité avec -e)");
+}
+
+SPEC_TEST(GNL_SUITE, "ligne de 100 000 en moins de 3 s")
+{
+	signal(SIGALRM, too_slow);
+	alarm(3);
+	LEN(100000, 1, 1);
+	alarm(0);
+}
 TEST(GNL_SUITE, "5 000 lignes d'un caractère")        { LEN(1, 1, 5000); }
 TEST(GNL_SUITE, "gros fichier (~80 Ko, longueurs variées)")
 {
@@ -264,7 +294,7 @@ TEST(GNL_SUITE, "read() échoue au milieu : NULL, puis repart de zéro")
 }
 TEST(GNL_SUITE, "lit le minimum (pas tout le fichier d'un coup)")
 {
-	size_t	tot = 6 + 300000 + 1;
+	size_t	tot = 6 + LONG(300000) + 1;
 	char	*d = gbuf(tot, 'x');
 	int		fd;
 	char	*r;
@@ -274,7 +304,7 @@ TEST(GNL_SUITE, "lit le minimum (pas tout le fichier d'un coup)")
 	d[tot - 1] = '\n';
 	fd = gnl_file(d, tot);
 	g_rd_bytes = 0;
-	INPUT("1er appel sur \"short\\n\" + 300 000 caractères");
+	INPUT("1er appel sur \"short\\n\" + %zu caractères", tot - 7);
 	r = get_next_line(fd);
 	CHECK(r && !strcmp(r, "short\n"), "1re ligne attendue \"short\\n\", reçu %s",
 		zft_str(r));

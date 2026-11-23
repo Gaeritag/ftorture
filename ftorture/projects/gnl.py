@@ -1,4 +1,7 @@
 """Source-only strategy: one isolated binary per BUFFER_SIZE and part."""
+from pathlib import Path
+import re
+
 from .base import Project
 from ..subject.gnl import gnl_checks
 from ..runtime import Context, RunnerError
@@ -6,25 +9,100 @@ from ..runtime import Context, RunnerError
 MANDATORY_SIZES = ("1", "2", "3", "5", "7", "10", "42", "100", "1024", "9999",
                    "100000", "10000000", "def", "0")
 BONUS_SIZES = ("1", "42", "9999", "10000000")
+CUSTOM_SLOTS = 8            # other BUFFER_SIZEs in -f: src/gnl/proj.c slots bsc1..8
+FILE_MAX = 16               # --file entries: src/gnl/t_gnl_custom.c
+SIZE_MAX = 256 * 1024 * 1024
+UNITS = {"": 1, "k": 1000, "m": 1000 ** 2}            # BUFFER_SIZE: 100k = 100000
+FILE_UNITS = {"": 1, "k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}   # file sizes
+
+
+def buffer_size(token: str) -> str | None:
+    """'42', '100k', '10M', 'def' -> canonical string; None if not a size."""
+    token = token.strip().lower()
+    if token == "def":
+        return token
+    match = re.fullmatch(r"(\d+)([km]?)", token)
+    return str(int(match.group(1)) * UNITS[match.group(2)]) if match else None
+
+
+def file_entry(token: str, base: Path) -> tuple[str, int]:
+    """--file value -> ('path', 0) for an existing file, ('size', bytes) for '500k'."""
+    path = (base / token).expanduser()
+    if path.is_file():
+        return str(path.resolve()), 0
+    match = re.fullmatch(r"(\d+)\s*([kmg]?)(?:o|b)?", token.strip().lower())
+    if match and int(match.group(1)):
+        return "", int(match.group(1)) * FILE_UNITS[match.group(2)]
+    raise ValueError(token)
 
 
 class GnlProject(Project):
     def validate(self, ctx: Context) -> None:
         super().validate(ctx)
         if ctx.options.functions:
-            unknown = set(ctx.options.functions.split(",")) - set(MANDATORY_SIZES)
+            tokens = [token for token in ctx.options.functions.split(",") if token.strip()]
+            unknown = [token for token in tokens if buffer_size(token) is None]
             if unknown:
-                raise RunnerError("Unknown BUFFER_SIZE: " + ", ".join(sorted(unknown)))
+                raise RunnerError(ctx.message("Unknown BUFFER_SIZE (a number ≥ 0, 100k, 10M or def): ",
+                                              "BUFFER_SIZE inconnu (un nombre ≥ 0, 100k, 10M ou def) : ")
+                                  + ", ".join(unknown))
+            if len(self.custom_sizes(ctx)) > CUSTOM_SLOTS:
+                raise RunnerError(ctx.message(f"At most {CUSTOM_SLOTS} BUFFER_SIZEs outside the usual list.",
+                                              f"Au plus {CUSTOM_SLOTS} BUFFER_SIZE hors de la liste habituelle."))
+        if len(ctx.options.files) > FILE_MAX:
+            raise RunnerError(ctx.message(f"At most {FILE_MAX} --file.", f"Au plus {FILE_MAX} --file."))
+        for token in ctx.options.files:
+            try:
+                path, size = file_entry(token, Path.cwd())
+            except ValueError:
+                raise RunnerError(ctx.message("--file: not a file nor a size (500, 64k, 2M): ",
+                                              "--file : ni un fichier ni une taille (500, 64k, 2M) : ") + token) from None
+            if size > SIZE_MAX:
+                raise RunnerError(ctx.message("--file: at most 256M", "--file : 256M au maximum") + f" ({token})")
+
+    def selected(self, ctx: Context) -> list[str] | None:
+        if not ctx.options.functions:
+            return None
+        sizes = [buffer_size(token) for token in ctx.options.functions.split(",") if token.strip()]
+        return list(dict.fromkeys(size for size in sizes if size is not None))
+
+    def custom_sizes(self, ctx: Context) -> list[str]:
+        """Selected sizes that have no line of their own in the usual list."""
+        return [size for size in self.selected(ctx) or () if size not in MANDATORY_SIZES]
 
     def checks(self, ctx: Context) -> None:
         gnl_checks(ctx, self.header, self.subject)
 
     def passes(self, ctx: Context, bonus: bool) -> list[tuple[int, str, str]]:
-        selected = set(ctx.options.functions.split(",")) if ctx.options.functions else None
-        return [(part, size, f"{'b' if part == 2 else ''}bs{size}")
-                for part, sizes in ((1, MANDATORY_SIZES), (2, BONUS_SIZES))
-                if (not ctx.options.part or ctx.options.part == part) and (part == 1 or bonus)
-                for size in sizes if selected is None or size in selected]
+        selected = self.selected(ctx)
+        custom = self.custom_sizes(ctx)
+        result = []
+        for part, sizes in ((1, MANDATORY_SIZES), (2, BONUS_SIZES)):
+            if (ctx.options.part and ctx.options.part != part) or (part == 2 and not bonus):
+                continue
+            prefix = "b" if part == 2 else ""
+            result += [(part, size, f"{prefix}bs{size}") for size in sizes if selected is None or size in selected]
+            # other sizes: their own slot, in the mandatory and the bonus part
+            result += [(part, size, f"{prefix}bsc{slot}") for slot, size in enumerate(custom, 1)]
+        return result
+
+    def files(self, ctx: Context) -> tuple[str, int]:
+        """FTORTURE_GNL_FILES for the C suite, and the largest input in bytes."""
+        lines, largest = [], 0
+        for token in ctx.options.files:
+            path, size = file_entry(token, Path.cwd())
+            lines.append(f"path:{path}" if path else f"size:{size}")
+            largest = max(largest, size or Path(path).stat().st_size)
+        return "\n".join(lines), largest
+
+    @staticmethod
+    def timeout(size: str, largest: int) -> int:
+        """Default per-test timeout of one pass: 10 s, more for a big --file read
+        with a small BUFFER_SIZE: one read() per BUFFER_SIZE bytes, ~10 µs each
+        with the tester's instrumentation and a malloc per read (measured ~8 µs),
+        plus ~50 ns per byte. Capped at 10 min; --timeout overrides it."""
+        buffer = 42 if size == "def" else max(1, min(int(size), 4096))
+        return min(600, 10 + int(largest / buffer * 1e-5 + largest * 5e-8))
 
     def run(self, ctx: Context) -> int:
         bonus = all((ctx.options.directory / name).is_file() for name in (
@@ -34,6 +112,9 @@ class GnlProject(Project):
             raise RunnerError(ctx.message("No BUFFER_SIZE selected or bonus sources missing.",
                                           "Aucun BUFFER_SIZE sélectionné ou sources bonus absentes."))
         flags = ctx.engine_flags("gnl")
+        files, largest = self.files(ctx)
+        if files:
+            ctx.env["FTORTURE_GNL_FILES"] = files
         for source in ("engine", "memtrack"):
             ctx.require([*ctx.cc, *flags, "-c", ctx.root / "src" / f"{source}.c",
                          "-o", ctx.build / f"{source}.o"], ctx.build / f"{source}.log")
@@ -46,6 +127,8 @@ class GnlProject(Project):
             suffix = "_bonus" if part == 2 else ""
             objects = []
             definitions = [] if size == "def" else ["-D", f"BUFFER_SIZE={size}"]
+            slot = ["-D", f"Z_SLOT={key.rsplit('c', 1)[1]}", "-D", f'Z_LABEL="BUFFER_SIZE={size}"'] \
+                if "bsc" in key else []
             compiled = True
             for name in (f"get_next_line{suffix}", f"get_next_line_utils{suffix}"):
                 obj = out / f"{name}.o"
@@ -62,12 +145,13 @@ class GnlProject(Project):
                 print(f"{'▲' if accepted else '✘'} BUFFER_SIZE={size}: " + ctx.message(
                     "compilation failed; see", "échec de compilation ; voir") + f" {out}", flush=True)
                 continue
-            tests = [ctx.root / "src/gnl" / name for name in ("gnl.c", "proj.c", "t_gnl.c", "b_gnl.c")]
+            tests = [ctx.root / "src/gnl" / name for name in ("gnl.c", "proj.c", "t_gnl.c", "b_gnl.c",
+                                                              "t_gnl_custom.c")]
             if part == 2:
                 tests.append(ctx.root / "src/gnl/t_gnl_bonus.c")
             executable = out / "tester"
             if not ctx.compile([*flags, "-D", f"Z_BS={-1 if size == 'def' else size}",
-                         "-D", f"GNL_SUITE={key}", ctx.build / "engine.o", ctx.build / "memtrack.o",
+                         "-D", f"GNL_SUITE={key}", *slot, ctx.build / "engine.o", ctx.build / "memtrack.o",
                          *tests, *objects, "-Wl,--wrap=malloc", "-Wl,--wrap=free", "-Wl,--wrap=read",
                          "-lm", "-o", executable], out / "link.log"):
                 failed = True
@@ -76,12 +160,15 @@ class GnlProject(Project):
                 continue
             args = ["-f", key, "--no-summary", "--stats-out", ctx.stats]
             if ctx.options.timeout is None:
-                args.extend(["--timeout", "10"])
+                args.extend(["--timeout", str(self.timeout(size, largest))])
+            if files:
+                # --file: only your files, for each selected BUFFER_SIZE
+                args.extend(["--name", "ton fichier :,fichier généré :"])
             if last is not None:
                 args.extend(["--stats-in", ctx.stats, "--no-legend", "--no-banner"])
             if part == previous_part:
                 args.append("--no-section")
-            if size in ("0", "10000000"):
+            if size == "0" or (size != "def" and int(size) >= 10000000):
                 args.append("--spec-pass")
             result = ctx.tester(executable, args, checks=last is None, function_filter=False)
             if result > 1:

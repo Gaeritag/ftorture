@@ -83,6 +83,9 @@ torture libft -f split,itoa -v       # quelques fonctions, avec tous les détail
 torture printf -f %d,"flag -"        # quelques conversions / flags
 torture printf -p 1                  # seulement la partie obligatoire
 torture gnl -f 1,42,9999             # seulement ces BUFFER_SIZE
+torture gnl -f 3,77,4096             # n'importe quels BUFFER_SIZE, même hors liste
+torture gnl -f 1,42 --file mon.txt   # seulement ton fichier, avec ces BUFFER_SIZE
+torture gnl --file 64k,2M            # fichiers générés de 64 Ko et 2 Mo
 torture push_swap ~/push_swap -e     # un push_swap (+ checker), avec l'efficacité
 torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les détails
 ```
@@ -93,8 +96,9 @@ torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les déta
 | `-v`, `--verbose` | affiche le détail de chaque échec |
 | `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 50) |
 | `-t`, `--target N` | objectif d'efficacité en % (1–100) ; active `-e` |
-| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : `1,42,def` (BUFFER_SIZE) · push_swap : `errors,simple,bench,perf100,checker…` |
+| `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : n'importe quels BUFFER_SIZE, `1,42,77,100k,def` · push_swap : `errors,simple,bench,perf100,checker…` |
 | `-p`, `--part N` | libft : 1, 2 ou 3 · printf / gnl / push_swap : 1 (obligatoire) ou 2 (bonus) |
+| `--file F\|TAILLE` | gnl : ne teste que ton fichier (comparé ligne à ligne à son contenu), ou un fichier généré de cette taille (`64k`, `2M`, 256M max) ; répétable, séparé par des virgules |
 | `--no-checks` | saute Makefile / norme / nm / prototypes |
 | `--no-norm` | saute norminette |
 | `--no-hidden` | ignore les fichiers/dossiers cachés dans les vérifications des fichiers, includes et norminette |
@@ -239,6 +243,22 @@ donne une ligne du rapport : 1, 2, 3, 5, 7, 10, 42, 100, 1024, 9999, 100 000,
   `-Wall -Wextra -Werror -D BUFFER_SIZE=42` **et sans `-D`**, uniquement `read`, `malloc`,
   `free` (`lseek` et la libft sont interdits), pas de variable globale, norminette,
   prototype, README avec l'algorithme.
+
+**Tailles de buffer et fichiers au choix** : `-f` accepte n'importe quelle liste de
+`BUFFER_SIZE` (`3,77,4096`, `100k` = 100 000, `10M`, `def`) ; une taille hors de la liste
+habituelle a sa propre ligne (8 au maximum) et passe aussi dans le bonus. `--file` remplace
+les tests habituels par tes entrées : un fichier texte à toi, lu ligne à ligne et comparé à
+son contenu, ou une taille (`64k`, `2M`) qui génère des lignes aléatoires de 0 à 200
+caractères, une de 10 000, la dernière sans `\n`. Avec `--file`, le timeout par défaut
+grandit avec la taille du fichier et rapetisse avec le `BUFFER_SIZE` (10 s + ~10 µs par
+`read()`, 10 min max) ; `--timeout` le remplace.
+
+**Petits `BUFFER_SIZE` sans attendre 10 minutes** : les lignes très longues (100 000 et
+300 000 caractères) sont coupées à 4096 `read()`, donc 4096 caractères avec
+`BUFFER_SIZE=1`, toujours largement au-delà du buffer. Une stash refaite par un `strjoin`
+après chaque `read()` est quadratique : avant, `BUFFER_SIZE=1` y passait des minutes et
+finissait en `T`. La vraie ligne de 100 000 caractères est gardée dans un test ▲ « en moins
+de 3 s » qui s'arrête au bout de 3 s et explique pourquoi, et `-e` mesure ce coût.
 
 `BUFFER_SIZE=0` et `BUFFER_SIZE=10000000` comptent comme ▲ : le sujet pose la question
 (un buffer de 10 Mo sur la pile crashe), à toi de savoir l'expliquer.

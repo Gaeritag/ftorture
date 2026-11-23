@@ -19,6 +19,30 @@ from ftorture.projects.gnl import PROJECT as GNL
 from ftorture.runtime import Context, Options, RunnerError
 
 ROOT = Path(__file__).resolve().parent.parent
+# a correct get_next_line (one byte per read)
+GNL_SOURCE = '''#include <stdlib.h>
+#include <unistd.h>
+char *get_next_line(int fd) {
+    size_t n = 0, cap = 16;
+    char *buf = malloc(cap), c;
+    if (!buf) return NULL;
+    for (;;) {
+        ssize_t k = read(fd, &c, 1);
+        if (k < 0 || (k == 0 && n == 0)) { free(buf); return NULL; }
+        if (k == 0) break;
+        if (n + 1 >= cap) {
+            char *b = malloc(cap * 2);
+            if (!b) { free(buf); return NULL; }
+            for (size_t i = 0; i < n; i++) b[i] = buf[i];
+            free(buf); buf = b; cap *= 2;
+        }
+        buf[n++] = c;
+        if (c == '\\n') break;
+    }
+    buf[n] = 0;
+    return buf;
+}
+'''
 spec = importlib.util.spec_from_file_location("ftorture_installer", ROOT / "install.py")
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
@@ -297,6 +321,33 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(GNL.passes(ctx, bonus=True), [(2, "1", "bbs1"), (2, "42", "bbs42")])
         self.assertEqual(GNL.passes(ctx, bonus=False), [])
 
+    def test_gnl_custom_buffer_sizes_files_and_timeout(self):
+        from ftorture.projects.gnl import buffer_size, file_entry
+        self.assertEqual([buffer_size(t) for t in ("42", "042", "100k", "10M", "def", "0", "-1", "x")],
+                         ["42", "42", "100000", "10000000", "def", "0", None, None])
+        ctx = Context(ROOT, "gnl", Options(Path("/unused"), functions="1,77,100k,77,3000"))
+        self.assertEqual(GNL.passes(ctx, bonus=True), [
+            (1, "1", "bs1"), (1, "100000", "bs100000"), (1, "77", "bsc1"), (1, "3000", "bsc2"),
+            (2, "1", "bbs1"), (2, "77", "bbsc1"), (2, "3000", "bbsc2")])
+        with tempfile.TemporaryDirectory() as tmp:
+            mine = Path(tmp) / "mine.txt"
+            mine.write_text("a\nb\n")
+            self.assertEqual(file_entry(str(mine), Path("/")), (str(mine.resolve()), 0))
+            self.assertEqual(file_entry("64k", Path(tmp)), ("", 65536))
+            self.assertEqual(file_entry("2M", Path(tmp)), ("", 2 * 1024 * 1024))
+            with self.assertRaises(ValueError):
+                file_entry("missing.txt", Path(tmp))
+            for options in (Options(Path(tmp), functions="1,-3"), Options(Path(tmp), files=("nope.txt",)),
+                            Options(Path(tmp), files=("1G",)),
+                            Options(Path(tmp), functions=",".join(str(n) for n in range(11, 20)))):
+                (Path(tmp) / "get_next_line.h").touch()
+                with self.subTest(options=options), self.assertRaises(RunnerError):
+                    GNL.validate(Context(ROOT, "gnl", options))
+        # 10 s, more for a big file read with a small BUFFER_SIZE, at most 10 min
+        self.assertEqual(GNL.timeout("42", 0), 10)
+        self.assertGreater(GNL.timeout("1", 2 * 1024 * 1024), GNL.timeout("1000", 2 * 1024 * 1024))
+        self.assertEqual(GNL.timeout("1", 256 * 1024 * 1024), 600)
+
 
 @unittest.skipUnless(all(shutil.which(tool) for tool in ("cc", "make", "nm")),
                      "integration tests require Linux C build tools")
@@ -441,29 +492,7 @@ class IntegrationTests(unittest.TestCase):
     def test_gnl_good_mandatory_bonus(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            source = '''#include <stdlib.h>
-#include <unistd.h>
-char *get_next_line(int fd) {
-    size_t n = 0, cap = 16;
-    char *buf = malloc(cap), c;
-    if (!buf) return NULL;
-    for (;;) {
-        ssize_t k = read(fd, &c, 1);
-        if (k < 0 || (k == 0 && n == 0)) { free(buf); return NULL; }
-        if (k == 0) break;
-        if (n + 1 >= cap) {
-            char *b = malloc(cap * 2);
-            if (!b) { free(buf); return NULL; }
-            for (size_t i = 0; i < n; i++) b[i] = buf[i];
-            free(buf); buf = b; cap *= 2;
-        }
-        buf[n++] = c;
-        if (c == '\\n') break;
-    }
-    buf[n] = 0;
-    return buf;
-}
-'''
+            source = GNL_SOURCE
             for suffix in ("", "_bonus"):
                 (directory / f"get_next_line{suffix}.h").write_text("char *get_next_line(int fd);\n")
                 (directory / f"get_next_line{suffix}.c").write_text(source)
@@ -525,6 +554,29 @@ char *get_next_line(int fd) {
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertNotIn("PART 2", result.stdout)
             self.assertIn("Bonus not tested: no bonus rule.", result.stdout)
+
+    def test_gnl_custom_size_and_files_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "gnl"
+            directory.mkdir()
+            (directory / "get_next_line.h").write_text("char *get_next_line(int fd);\n")
+            (directory / "get_next_line.c").write_text(GNL_SOURCE)
+            (directory / "get_next_line_utils.c").write_text("")
+            mine = Path(tmp) / "my notes.txt"
+            mine.write_text("first\n\nthird line\nno newline")
+            result = self.invoke("gnl", directory, "--no-checks", "-f", "77", "--file", f"{mine},3k",
+                                 "--lang", "en", "--no-color", "-v")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("BUFFER_SIZE=77", result.stdout)
+            self.assertIn("2/2", result.stdout)  # only the two --file tests
+            total = next(line for line in (ROOT / "ftorture.log").read_text().splitlines()
+                         if line.startswith("TOTAL:"))
+            self.assertIn("2 ok, 0 failed", total)
+            (directory / "get_next_line.c").write_text(GNL_SOURCE.replace("buf[n++] = c;", "if (c != 'o') buf[n++] = c;"))
+            result = self.invoke("gnl", directory, "--no-checks", "-f", "77", "--file", str(mine),
+                                 "--lang", "en", "--no-color", "-v")
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("your file: my notes.txt", result.stdout)
 
 
 if __name__ == "__main__":

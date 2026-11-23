@@ -31,6 +31,7 @@ class Options:
     timeout: int | None = None
     no_color: bool = False
     ignore_hidden: bool = False
+    files: tuple[str, ...] = ()     # gnl --file: paths or sizes (normalized by the project)
 
 
 @dataclass

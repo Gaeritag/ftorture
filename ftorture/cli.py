@@ -84,7 +84,12 @@ def parser(lang: str) -> argparse.ArgumentParser:
         "comparer chaque fonction à un temps parfait, objectif N %% optionnel (défaut : 50)"))
     result.add_argument("-t", "--target", dest="efficiency_target", type=percentage, metavar="N", help=t(
         "efficiency target in %% (1-100); turns -e on", "objectif d'efficacité en %% (1-100) ; active -e"))
-    result.add_argument("-f", "--func", help=t("function or BUFFER_SIZE filter", "filtre fonction ou BUFFER_SIZE"))
+    result.add_argument("-f", "--func", help=t(
+        "function filter; gnl: any BUFFER_SIZE list (1,42,77,100k,def)",
+        "filtre de fonctions ; gnl : n'importe quels BUFFER_SIZE (1,42,77,100k,def)"))
+    result.add_argument("--file", dest="files", action="append", default=[], metavar="FILE|SIZE", help=t(
+        "gnl: test only your own file, or a generated file of that size (64k, 2M); repeatable, comma-separated",
+        "gnl : tester seulement ton fichier, ou un fichier généré de cette taille (64k, 2M) ; répétable, séparé par des virgules"))
     result.add_argument("-p", "--part", type=positive, help=t("test only part N", "tester seulement la partie N"))
     result.add_argument("--seed", type=unsigned, default=42, help=t("random seed (default: 42)", "graine aléatoire (défaut : 42)"))
     result.add_argument("--timeout", type=positive, help=t("seconds per C test", "secondes par test C"))
@@ -166,13 +171,16 @@ def main(argv: list[str] | None = None) -> int:
                           efficiency=args.efficiency or args.efficiency_target is not None,
                           efficiency_target=50 if args.efficiency_target is None else args.efficiency_target,
                           seed=args.seed, part=args.part, functions=args.func, timeout=args.timeout,
-                          no_color=args.no_color, ignore_hidden=args.no_hidden)
+                          no_color=args.no_color, ignore_hidden=args.no_hidden,
+                          files=tuple(item for value in args.files for item in value.split(",") if item.strip()))
         if args.target is None and sys.stdin.isatty() and sys.stdout.isatty():
             project, options = interactive(options, registry)
         else:
             project = project or registry.detect(directory)
         if project is None:
             raise RunnerError(text(lang, "No supported project header found.", "Aucun en-tête de projet reconnu."))
+        if options.files and project.key != "gnl":
+            raise RunnerError(text(lang, "--file is for get_next_line only.", "--file ne sert qu'à get_next_line."))
         return execute(Context(ROOT, project.key, options), project)
     except (RunnerError, OSError) as exc:
         print(f"ftorture: {exc}", file=sys.stderr)

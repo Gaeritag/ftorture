@@ -51,8 +51,9 @@ static struct s_opt
 	int			english;
 	int			eff;			/* --efficiency: time against the expected */
 	int			eff_target;		/* expected efficiency, in %              */
+	const char	*names;			/* --name: only tests whose name has one  */
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL, 0, 0, 0, 0, 50};
+	NULL, 0, 0, 0, 0, 50, NULL};
 
 #define L(fr, en) (o.english ? (en) : (fr))
 
@@ -94,6 +95,10 @@ static const char	*localize(const char *src)
 		{"NULL renvoyé", "NULL returned"},
 		{"alors qu'il reste des lignes", "while lines remain"},
 		{"pas de", "no"}, {"ni de", "or"},
+		{"jusqu'à", "up to"}, {"en moins de", "in less than"},
+		{"fichier généré :", "generated file:"}, {"ton fichier :", "your file:"},
+		{"fichier généré", "generated file"}, {"ton fichier", "your file"},
+		{" Ko", " KB"}, {" Mo", " MB"},
 		/* push_swap */
 		{"nombres", "numbers"}, {"coups", "moves"}, {"aléatoires", "random"},
 		{"inversé", "reversed"}, {"trié", "sorted"},
@@ -2151,6 +2156,8 @@ int	main(int ac, char **av)
 			o.spec_pass = 1;
 		else if (!strcmp(a, "--no-section"))
 			o.no_section = 1;
+		else if (!strcmp(a, "--name") && i + 1 < ac)
+			o.names = av[++i];
 		else
 		{
 			usage();
@@ -2170,6 +2177,30 @@ int	main(int ac, char **av)
 		g_log = fopen(o.log, o.stats_in ? "a" : "w");
 	if (o.stats_in)
 		stats_load(o.stats_in);
+	if (o.names)
+	{
+		int	k = 0;
+
+		/* raw (untranslated) test names containing one of the comma items */
+		for (i = 0; i < g_ntests; i++)
+		{
+			const char	*p = o.names;
+			int			keep = 0;
+
+			while (*p && !keep)
+			{
+				size_t	l = strcspn(p, ",");
+				char	w[256];
+
+				snprintf(w, sizeof(w), "%.*s", (int)(l < 255 ? l : 255), p);
+				keep = l && strstr(g_tests[i].name, w) != NULL;
+				p += l + (p[l] == ',');
+			}
+			if (keep)
+				g_tests[k++] = g_tests[i];
+		}
+		g_ntests = k;
+	}
 	qsort(g_tests, (size_t)g_ntests, sizeof(t_test), cmp_tests);
 	if (!o.no_banner)
 		banner();
