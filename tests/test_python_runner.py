@@ -397,6 +397,44 @@ class IntegrationTests(unittest.TestCase):
             self.assertRegex(result.stdout, r"ft_strlen\s+✔|✔\s+ft_strlen")
             self.assertFalse((directory / "srcs/string/ft_strlen.o").exists())
 
+    def test_printf_with_libft_folder(self):
+        for merged in (True, False):
+            with self.subTest(merged=merged), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                (directory / "libft").mkdir()
+                (directory / "libft/libft.h").write_text(
+                    "#ifndef LIBFT_H\n# define LIBFT_H\n# include <stddef.h>\nsize_t ft_strlen(const char *s);\n#endif\n")
+                (directory / "libft/ft_strlen.c").write_text(
+                    '#include "libft.h"\nsize_t ft_strlen(const char *s) { size_t n = 0; while (s[n]) n++; return n; }\n')
+                (directory / "libft/Makefile").write_text(
+                    "NAME = libft.a\nall: $(NAME)\n$(NAME): ft_strlen.o\n\tar rcs $@ $^\n"
+                    "ft_strlen.o: ft_strlen.c libft.h\n\tcc -Wall -Wextra -Werror -c $< -o $@\n"
+                    "clean:\n\trm -f ft_strlen.o\nfclean: clean\n\trm -f $(NAME)\nre: fclean all\n")
+                (directory / "ft_printf.h").write_text(
+                    "#ifndef FT_PRINTF_H\n# define FT_PRINTF_H\n# include \"libft.h\"\nint ft_printf(const char *f, ...);\n#endif\n")
+                (directory / "ft_printf.c").write_text(
+                    '#include <unistd.h>\n#include "ft_printf.h"\n'
+                    'int ft_printf(const char *f, ...) { return (int)write(1, f, ft_strlen(f)); }\n')
+                copy = "\tcp libft/libft.a $(NAME)\n" if merged else ""
+                (directory / "Makefile").write_text(
+                    "NAME = libftprintf.a\nall: $(NAME)\n$(NAME): ft_printf.o\n\t$(MAKE) -C libft\n"
+                    f"{copy}\tar rcs $(NAME) ft_printf.o\n"
+                    "ft_printf.o: ft_printf.c ft_printf.h\n\tcc -Wall -Wextra -Werror -Ilibft -c $< -o $@\n"
+                    "clean:\n\t$(MAKE) -C libft clean\n\trm -f ft_printf.o\n"
+                    "fclean: clean\n\t$(MAKE) -C libft fclean\n\trm -f $(NAME)\nre: fclean all\n")
+                result = self.invoke("printf", directory, "--no-norm", "-p", "1", "-f", "%%", "--lang", "en", "--no-color")
+                out = result.stdout
+                self.assertIn("Extra files              none", out)
+                self.assertIn("External functions       only free, malloc, write", out)  # ft_strlen is allowed
+                self.assertIn("ft_printf.h self-contained", out)
+                self.assertNotIn("unused", out)
+                if merged:
+                    self.assertIn("✔ libft in the archive", out)
+                else:
+                    self.assertIn("✘ libft in the archive", out)
+                    self.assertIn("ft_strlen", out)
+                self.assertFalse((directory / "libft/libft.a").exists())  # final make fclean
+
     def test_subject_checks_preserve_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

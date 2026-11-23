@@ -74,7 +74,25 @@ def archive_checks(ctx: Context, project: "ArchiveProject", *, algorithm: bool =
         report.section("CODE")
         check_norm(session)
         IncludeAnalysis(session).run()
-        check_symbols(session, symbols(session, [archive]), allowed={"malloc", "free", "write"},
+        libft = ctx.options.directory / "libft/libft.a"
+        if project.key == "printf" and libft.is_file():
+            # The subject allows a libft/ folder: its functions are not external,
+            # and its own externals are checked with the same rule.
+            own = symbols(session, [archive])
+            defined = {name for kind, name, _ in own if kind != "U"}
+            from_libft = sorted({name for kind, name, _ in own if kind == "U"} - defined
+                                & {name for kind, name, _ in symbols(session, [libft]) if kind == "T"})
+            session.check("KO" if from_libft else "OK", "libft in the archive", "libft dans l'archive",
+                          ("missing from the archive: " + ", ".join(from_libft) + " (a program linked with "
+                           "libftprintf.a alone does not build: cp libft/libft.a $(NAME) before ar rcs)")
+                          if from_libft else "the libft functions used are inside the archive",
+                          ("absentes de l'archive : " + ", ".join(from_libft) + " (un programme lié avec "
+                           "libftprintf.a seul ne compile pas : cp libft/libft.a $(NAME) avant ar rcs)")
+                          if from_libft else "les fonctions de la libft utilisées sont dans l'archive")
+            entries = symbols(session, [archive, libft])
+        else:
+            entries = symbols(session, [archive])
+        check_symbols(session, entries, allowed={"malloc", "free", "write"},
                       required=[name for name, _, _ in expected_prototypes(session)], libft=linked_list)
         check_prototypes(session, project.header, project.subject, linked_list=linked_list)
     finally:
