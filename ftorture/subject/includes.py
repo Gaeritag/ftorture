@@ -121,7 +121,11 @@ class IncludeAnalysis:
         self.builtin_macros: set[str] | None = None
 
     def resolve(self, path: Path, name: str) -> Path | None:
-        for candidate in (path.parent / name, self.root / name):
+        # like the compiler: the including file's folder, then every -I folder
+        # (each folder of the project that holds a header: includes/, inc/...)
+        if not hasattr(self, "include_dirs"):
+            self.include_dirs = sorted({source.parent for source in self.sources if source.suffix == ".h"})
+        for candidate in (path.parent / name, self.root / name, *(d / name for d in self.include_dirs)):
             resolved = candidate.resolve()
             if resolved.is_relative_to(self.root) and resolved in self.sources:
                 return resolved

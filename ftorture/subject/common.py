@@ -40,18 +40,57 @@ def project_files(root: Path, *, ignore_hidden: bool = False, gitignore: bool = 
             yield here / name
 
 
+def find_file(root: Path, name: str, *, max_depth: int = 4, limit: int = 20000,
+              ignore_hidden: bool = False) -> Path | None:
+    """Shallowest `name` under root (root first), skipping .git and what the
+    .gitignore files ignore. Bounded, so a home directory stays fast."""
+    rules = GitIgnore(root)
+    level, seen = [root], 0
+    for _ in range(max_depth + 1):
+        found, deeper = [], []
+        for directory in level:
+            rules.enter(directory)
+            try:
+                entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+            except OSError:
+                continue
+            for entry in entries:
+                seen += 1
+                if seen > limit:
+                    return min(found, default=None)
+                if entry.name == ".git" or (ignore_hidden and entry.name.startswith(".")):
+                    continue
+                is_dir = entry.is_dir(follow_symlinks=False)
+                if rules.ignored(Path(entry.path), is_dir):
+                    continue
+                if is_dir:
+                    deeper.append(Path(entry.path))
+                elif entry.name == name and entry.is_file():
+                    found.append(Path(entry.path))
+        if found:
+            return min(found)
+        level = deeper
+    return None
+
+
+def header_dirs(root: Path, *, ignore_hidden: bool = False) -> list[Path]:
+    """Every folder holding a submitted .h: the -I list of a project with includes/."""
+    return sorted({path.parent for path in project_files(root, ignore_hidden=ignore_hidden)
+                   if path.suffix == ".h" and path.is_file()} | {root})
+
+
 def allowed_path(key: str, relative: str) -> bool:
     path = Path(relative)
     if path.name == ".gitignore" or relative in ("Makefile", "README.md"):
         return True
     if key == "libft":
-        return relative == "libft.h" or (len(path.parts) == 1 and fnmatch.fnmatchcase(relative, "ft_*.c"))
+        # libft.h and ft_*.c, at the root or in subfolders (srcs/, includes/...)
+        return path.name == "libft.h" or fnmatch.fnmatchcase(path.name, "ft_*.c")
     if key == "push_swap":
         # Subject: Makefile, *.h, *.c (and a libft folder with its Makefile).
         return path.suffix in (".c", ".h") or relative == "libft/Makefile"
     if key == "printf":
-        return ((len(path.parts) <= 2 and path.suffix in (".c", ".h"))
-                or relative in ("libft/Makefile", "libft/README.md"))
+        return path.suffix in (".c", ".h") or relative in ("libft/Makefile", "libft/README.md")
     return relative in {f"get_next_line{suffix}{ext}"
                         for suffix in ("", "_utils", "_bonus", "_utils_bonus")
                         for ext in (".c", ".h") if not ("utils" in suffix and ext == ".h")}

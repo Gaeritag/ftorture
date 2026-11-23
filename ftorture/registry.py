@@ -28,7 +28,7 @@ class Registry:
                                             makefile.read_text(errors="replace"), re.M):
             return next((project for project in self.projects if project.key == "push_swap"), None)
         return next((project for project in sorted(self.projects, key=lambda p: priority.get(p.key, 3))
-                     if not project.custom and project.header and (directory / project.header).is_file()), None)
+                     if not project.custom and project.find_header(directory)), None)
 
 
 def load_registry(custom_directory: Path | None = None) -> Registry:

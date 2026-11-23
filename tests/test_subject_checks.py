@@ -49,11 +49,43 @@ class FilePolicyTests(unittest.TestCase):
     def test_submission_policies(self):
         self.assertTrue(allowed_path("libft", "ft_strlen.c"))
         self.assertFalse(allowed_path("libft", "extra.txt"))
-        self.assertFalse(allowed_path("libft", "src/ft_strlen.c"))
+        # subfolders are fine where the subject allows them (not GNL)
+        self.assertTrue(allowed_path("libft", "src/ft_strlen.c"))
+        self.assertTrue(allowed_path("libft", "includes/libft.h"))
+        self.assertFalse(allowed_path("libft", "src/helper.c"))
         self.assertTrue(allowed_path("printf", "libft/libft.h"))
-        self.assertFalse(allowed_path("printf", "libft/deeper/file.c"))
+        self.assertTrue(allowed_path("printf", "srcs/conv/ft_putnbr.c"))
+        self.assertFalse(allowed_path("printf", "srcs/notes.txt"))
+        self.assertTrue(allowed_path("push_swap", "srcs/algo/radix.c"))
         self.assertTrue(allowed_path("gnl", "get_next_line_utils_bonus.c"))
         self.assertFalse(allowed_path("gnl", "get_next_line_utils.h"))
+        self.assertFalse(allowed_path("gnl", "src/get_next_line.c"))
+
+    def test_headers_in_subfolders_resolve_for_includes_and_prototypes(self):
+        from ftorture.subject.common import find_file
+        with session_for("libft") as (session, student):
+            (student / "includes").mkdir()
+            (student / "srcs/str").mkdir(parents=True)
+            (student / "includes/libft.h").write_text(
+                "#ifndef LIBFT_H\n# define LIBFT_H\n# include <stddef.h>\nsize_t ft_strlen(const char *s);\n#endif\n")
+            (student / "srcs/str/ft_strlen.c").write_text(
+                '#include "libft.h"\nsize_t ft_strlen(const char *s) { size_t n = 0; while (s[n]) n++; return n; }\n')
+            self.assertEqual(find_file(student, "libft.h"), student / "includes/libft.h")
+            self.assertEqual(LIBFT.find_header(student), student / "includes/libft.h")
+            check_files(session, lambda path: allowed_path("libft", path))
+            self.assertTrue(session.report.records[-1].startswith("C|OK|Extra files|"))
+            IncludeAnalysis(session).run()
+            records = "\n".join(session.report.records)
+            self.assertNotIn("unused", records)
+            self.assertIn("C|OK|Includes|", records)
+            check_prototypes(session, "libft.h", "19.3")
+            self.assertIn("P|ft_strlen|OK|", "\n".join(session.report.records))
+            # an ignored or hidden copy is never picked
+            (student / ".gitignore").write_text("old/\n")
+            (student / "old").mkdir()
+            (student / "old/libft.h").touch()
+            (student / "includes/libft.h").unlink()
+            self.assertIsNone(find_file(student, "libft.h"))
 
     def test_git_is_ignored_and_extra_files_fail(self):
         with session_for() as (session, student):

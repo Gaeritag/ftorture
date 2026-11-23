@@ -182,6 +182,12 @@ comparison using temporary copies of a real libft project.
 
 ## Checks (libft and ft_printf)
 
+**Subfolders**: libft, ft_printf and push_swap may keep their sources and headers in
+subfolders (`srcs/`, `includes/`…); the header is looked for at the root, then in
+subfolders, and every folder holding a `.h` is a `-I` for include and prototype checks. The
+`Makefile`, `README.md` and the archive stay at the root. get_next_line keeps its 3 files at
+the root, as its subject requires.
+
 In every project, what the folder's `.gitignore` files ignore (at the root or in a
 subfolder, with `!`, `**` and `/` as in git) is not part of your submission: extra-file,
 include and norminette checks skip it. The "Extra files" line says how many entries were

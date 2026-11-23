@@ -198,8 +198,8 @@ def path_input(terminal: Terminal, default: str) -> str:
 
 def choose_path(terminal: Terminal, project) -> Path:
     home_project = Path.home() / project.name
-    default = Path.cwd() if (Path.cwd() / project.header).is_file() else home_project
-    if not (default / project.header).is_file():
+    default = Path.cwd() if project.find_header(Path.cwd()) else home_project
+    if not project.find_header(default):
         default = Path.cwd()
     error = ""
     while True:
@@ -213,7 +213,7 @@ def choose_path(terminal: Terminal, project) -> Path:
             error = terminal.t("directory not found: ", "dossier introuvable : ") + value
         elif project.requires_makefile and not (directory / "Makefile").is_file():
             error = terminal.t("no Makefile in ", "pas de Makefile dans ") + value
-        elif project.header and not (directory / project.header).is_file():
+        elif project.header and not project.find_header(directory):
             error = terminal.t(f"no {project.header} in ", f"pas de {project.header} dans ") + value
         else:
             return directory.resolve()

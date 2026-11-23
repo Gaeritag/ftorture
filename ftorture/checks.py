@@ -65,7 +65,11 @@ class CheckSession:
                  *, name: str = "compiler") -> tuple[int, str]:
         path = self.directory / f"{name}.c"
         path.write_text(source, encoding="utf-8")
-        return self.capture([*self.ctx.cc, "-std=gnu11", f"-I{self.ctx.options.directory}",
+        if not hasattr(self, "include_dirs"):
+            from .subject.common import header_dirs
+            self.include_dirs = header_dirs(self.ctx.options.directory,
+                                            ignore_hidden=self.ctx.options.ignore_hidden)
+        return self.capture([*self.ctx.cc, "-std=gnu11", *(f"-I{d}" for d in self.include_dirs),
                              *flags, "-x", "c", path], name=name)
 
     def check(self, status: str, en_label: str, fr_label: str,

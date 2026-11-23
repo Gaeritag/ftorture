@@ -376,6 +376,27 @@ class IntegrationTests(unittest.TestCase):
                 self.assertFalse((directory / "ft_strlen.o").exists())
                 self.assertFalse((directory / "libft.a").exists())  # final make fclean
 
+    def test_libft_in_subfolders_is_detected_built_and_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "includes").mkdir()
+            (directory / "srcs/string").mkdir(parents=True)
+            (directory / "includes/libft.h").write_text(
+                "#ifndef LIBFT_H\n# define LIBFT_H\n# include <stddef.h>\nsize_t ft_strlen(const char *s);\n#endif\n")
+            (directory / "srcs/string/ft_strlen.c").write_text(
+                '#include "libft.h"\nsize_t ft_strlen(const char *s) { size_t n = 0; while (s[n]) n++; return n; }\n')
+            (directory / "Makefile").write_text(
+                "NAME = libft.a\nOBJ = srcs/string/ft_strlen.o\nall: $(NAME)\n$(NAME): $(OBJ)\n\tar rcs $@ $^\n"
+                "%.o: %.c includes/libft.h\n\tcc -Wall -Wextra -Werror -Iincludes -c $< -o $@\n"
+                "clean:\n\trm -f $(OBJ)\nfclean: clean\n\trm -f $(NAME)\nre: fclean all\n")
+            self.assertEqual(detect(directory).key, "libft")
+            result = self.invoke(directory, "--no-norm", "-f", "strlen", "--lang", "en", "--no-color")
+            self.assertIn("Extra files              none", result.stdout)
+            self.assertIn("libft.h self-contained", result.stdout)
+            self.assertNotIn("unused", result.stdout)
+            self.assertRegex(result.stdout, r"ft_strlen\s+✔|✔\s+ft_strlen")
+            self.assertFalse((directory / "srcs/string/ft_strlen.o").exists())
+
     def test_subject_checks_preserve_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

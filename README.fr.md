@@ -168,6 +168,12 @@ Bash et Python sur des copies temporaires d'un vrai projet libft.
 
 ## Vérifications (libft et ft_printf)
 
+**Sous-dossiers** : libft, ft_printf et push_swap peuvent ranger leurs sources et leurs
+headers dans des sous-dossiers (`srcs/`, `includes/`…) ; le header est cherché à la racine
+puis dans les sous-dossiers, et chaque dossier qui contient un `.h` sert de `-I` pour les
+includes et les prototypes. Le `Makefile`, le `README.md` et l'archive restent à la racine.
+get_next_line garde ses 3 fichiers à la racine, comme le demande le sujet.
+
 Dans tous les projets, ce que les `.gitignore` du dossier ignorent (à la racine ou dans
 un sous-dossier, avec `!`, `**`, `/` comme git) n'est pas dans ton rendu : les fichiers en
 trop, les includes et norminette ne le regardent pas. La ligne « Fichiers en trop » dit

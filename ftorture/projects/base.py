@@ -1,6 +1,7 @@
 """Project interface: metadata, validation, checks, execution and cleanup."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..runtime import Context, RunnerError
 
@@ -18,9 +19,20 @@ class Project(ABC):
     requires_compiler: bool = True
     requires_makefile: bool = False
     custom: bool = False
+    nested: bool = True     # header and sources may sit in subfolders (not GNL)
+
+    def find_header(self, directory: Path, *, ignore_hidden: bool = False) -> Path | None:
+        if not self.header:
+            return None
+        if (directory / self.header).is_file():
+            return directory / self.header
+        if not self.nested:
+            return None
+        from ..subject.common import find_file
+        return find_file(directory, self.header, ignore_hidden=ignore_hidden)
 
     def validate(self, ctx: Context) -> None:
-        if not (ctx.options.directory / self.header).is_file():
+        if not self.find_header(ctx.options.directory, ignore_hidden=ctx.options.ignore_hidden):
             raise RunnerError(f"{ctx.options.directory}: {self.header} " + ctx.message(
                 "not found", "introuvable"))
         if ctx.options.part is not None and ctx.options.part not in self.parts:

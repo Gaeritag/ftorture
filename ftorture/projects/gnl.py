@@ -185,5 +185,6 @@ class GnlProject(Project):
         return max(int(failed), ctx.tester(last, args, function_filter=False))
 
 
+# The subject asks for the three files at the root: no subfolder search.
 PROJECT = GnlProject(key="gnl", name="get_next_line", aliases=("get_next_line",),
-                     header="get_next_line.h", subject="14.3")
+                     header="get_next_line.h", subject="14.3", nested=False)
