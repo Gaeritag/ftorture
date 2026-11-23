@@ -95,7 +95,9 @@ torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 | Option | Effect |
 |---|---|
 | `-s`, `--speculative` | speculative errors (▲) make the run fail |
-| `-v`, `--verbose` | show the details of every failure |
+| `-v`, `--verbose` | every failure in full: why it fails, the test's code, the call, a `main.c`, the `--repro` command |
+| `--repro TEST` | rebuild one failing test alone with your code and run it under valgrind (`TEST` is printed by `-v`) |
+| `--gdb` | with `--repro`: run the test under gdb |
 | `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
 | `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
 | `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: any BUFFER_SIZEs, `1,42,77,100k,def` · push_swap: `errors,simple,bench,perf100,checker…` |
@@ -327,6 +329,48 @@ With `-e`, push_swap's efficiency is not a time: it is your **average operation 
 on 20 lists of 100 and 8 lists of 500 numbers, compared with the subject's "excellent"
 threshold (100 % = 700 or 5500 operations). The 50 % target (default) therefore means
 1400 and 11 000 operations.
+
+## Understanding a failure (`-v`) and replaying it (`--repro`)
+
+With `-v`, every ✘ / ▲ comes with everything needed to understand and reproduce it:
+
+```
+      ✘ #12 « dst NULL, size = 0 »  t_part1.c:429
+        your function crashes (SIGSEGV · segmentation fault), but the reference does not
+        expected  3
+        actual    CRASH
+        why       The real function (glibc, BSD, or the reference for functions
+                  without an original) handles this input without crashing: …
+        test      │ VS(ft_strlcat, "dst NULL, size = 0")
+                  │ {
+                  │  OUT("%zu", PICK(ft_strlcat, r_strlcat)(NULL, "abc", 0));
+                  │ }
+        call      ft_strlcat(NULL, "abc", 0);
+        main.c    │ #include "libft.h"
+                  │ …
+                  │  ft_strlcat(NULL, "abc", 0);  /* expected: 3 · actual: CRASH */
+                  cc -g main.c libft.a && valgrind ./a.out
+        replay    torture libft ~/libft --repro 't_part1.c#97@ft_strlcat'
+```
+
+- **why**: what the error means and what to look at in your code, by kind of failure
+  (segfault, read past the end of a guarded buffer, abort, timeout, leak, double free,
+  unprotected malloc, result different from the original, ▲ protection…).
+- **test**: the source of the test (or the macro line that generates it).
+- **call** and **main.c**: the call that triggers the failure and a main to paste into
+  your project (for get_next_line: a main that reads `test.txt`).
+- **replay**: `--repro` rebuilds **only that test** with your code, without fork and with
+  the real malloc, then runs it under **valgrind** when installed: the faulty line of
+  your code is shown. The test data stays glued to a forbidden page (an over-read still
+  crashes), the same failing malloc is reproduced (`mK` in the token), and so is the
+  random seed. Add `--gdb` to debug it step by step.
+
+```bash
+torture libft ~/libft --repro 't_part1.c#97@ft_strlcat'          # valgrind
+torture libft ~/libft --repro 't_part1.c#97@ft_strlcat' --gdb    # gdb
+```
+
+Without `-v`, the report stays compact; `ftorture.log` always contains the full details.
 
 ## Your function vs the real one
 

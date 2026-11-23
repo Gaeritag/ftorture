@@ -33,6 +33,8 @@ class Options:
     no_color: bool = False
     ignore_hidden: bool = False
     files: tuple[str, ...] = ()     # gnl --file: paths or sizes (normalized by the project)
+    repro: str | None = None        # --repro FILE#IDX[mK][@SUITE[=BS]]: rebuild one test alone
+    gdb: bool = False               # --repro under gdb instead of valgrind
 
 
 @dataclass
@@ -151,7 +153,17 @@ class Context:
             args.extend(["--timeout", str(opts.timeout)])
         if function_filter and opts.functions:
             args.extend(["-f", opts.functions])
+        # -v prints "torture <key> <dir> --repro TOKEN" under each failure
+        args.extend(["--repro-cmd", self.repro_prefix()])
         return args
+
+    def repro_prefix(self) -> str:
+        prefix = ["torture", self.key, str(self.options.directory)]
+        if self.options.lang == "en":
+            prefix.extend(["--lang", "en"])
+        if self.options.seed != 42:
+            prefix.extend(["--seed", str(self.options.seed)])
+        return shlex.join(prefix)
 
     def tester(self, executable: Path, extra: list[str | Path], *,
                checks: bool = False, function_filter: bool = True) -> int:

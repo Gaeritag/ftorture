@@ -52,8 +52,9 @@ static struct s_opt
 	int			eff;			/* --efficiency: time against the expected */
 	int			eff_target;		/* expected efficiency, in %              */
 	const char	*names;			/* --name: only tests whose name has one  */
+	const char	*repro_cmd;		/* "torture libft /path": -v replay hint  */
 }	o = {0, 0, 1, 0, NULL, NULL, NULL, ".", 42, 3, 3, 0, 0, 0, NULL, NULL,
-	NULL, 0, 0, 0, 0, 50, NULL};
+	NULL, 0, 0, 0, 0, 50, NULL, NULL};
 
 #define L(fr, en) (o.english ? (en) : (fr))
 
@@ -232,7 +233,7 @@ static int		g_ntests;
 static int		g_cap;
 
 void	zft_register(const char *func, const char *name, t_kind kind, int spec,
-			void (*fn)(void), const char *file, int line)
+			void (*fn)(void), const char *file, int line, int idx)
 {
 	if (g_ntests == g_cap)
 	{
@@ -240,7 +241,7 @@ void	zft_register(const char *func, const char *name, t_kind kind, int spec,
 		g_tests = realloc(g_tests, sizeof(t_test) * (size_t)g_cap);
 	}
 	g_tests[g_ntests] = (t_test){func, name, kind, spec, fn, file, line,
-		g_ntests};
+		g_ntests, idx};
 	g_ntests++;
 }
 
@@ -584,6 +585,588 @@ static void	detail_shm(t_sb *b, const t_shm *s, int with_values)
 	(void)with_values;
 }
 
+/* ===================================================== verbose details === */
+/* With -v every failure also gets: why it fails and what to look at, the
+   source of the test, the call that triggers it, a main.c to paste, and the
+   command that rebuilds this single test with your code (--repro). The
+   extra part starts with DETAIL_SEP: without -v only the part before it is
+   printed, the log always gets everything.                                */
+#define DETAIL_SEP '\x1e'
+
+enum e_why
+{
+	W_NONE,
+	W_SIG,			/* normal test killed by a signal                         */
+	W_ASSERT,		/* an assertion failed                                    */
+	W_LEAK,
+	W_EXIT,
+	W_VS_CRASH,		/* yours crashes, the reference does not                  */
+	W_VS_SPEC,		/* the reference crashes, yours does not                  */
+	W_VS_DIFF,
+	W_VS_DIFF_SPEC,
+	W_VS_TIMEOUT,
+	W_MALLOC		/* failure while malloc n°k returns NULL                  */
+};
+
+static int	g_why;
+static int	g_why_sig;
+static int	g_fail_k;
+
+static void	why(int w, int sig, int k)
+{
+	g_why = w;
+	g_why_sig = sig;
+	g_fail_k = k;
+}
+
+/* "        label    text" wrapped at ~76 columns */
+static void	sb_wrap(t_sb *b, const char *label, const char *text,
+				const char *col)
+{
+	const int	width = 64;
+	const char	*p = text;
+	int			first = 1;
+
+	while (*p)
+	{
+		const char	*end = p;
+		const char	*cut = NULL;
+		int			n = 0;
+
+		while (*end && *end != '\n' && n < width)
+		{
+			if (*end == ' ')
+				cut = end;
+			if (((unsigned char)*end & 0xC0) != 0x80)
+				n++;
+			end++;
+		}
+		if (*end && *end != '\n' && cut)
+			end = cut;
+		sb_add(b, "        %s%-9s%s %s%.*s%s\n", C_GRY, first ? label : "",
+			C_RST, col, (int)(end - p), p, C_RST);
+		first = 0;
+		p = end;
+		while (*p == ' ' || *p == '\n')
+			p++;
+	}
+}
+
+static int	has(const char *s, const char *w)
+{
+	return (s && strstr(s, w) != NULL);
+}
+
+static const char	*sig_hint(int sig, const t_test *t)
+{
+	int	guarded = has(t->name, "gardé") || has(t->name, "bornée")
+		|| has(t->name, "ne lit pas") || has(t->name, "sans lire");
+
+	if (sig == SIGSEGV || sig == SIGBUS)
+		return (guarded
+			? L("Ce test colle les données juste avant une page mémoire "
+				"interdite : ta fonction lit (ou écrit) au-delà de la fin. "
+				"Vérifie la condition d'arrêt de ta boucle : teste la taille "
+				"(n, size, len) AVANT de lire le caractère suivant.",
+				"This test puts the data right before a forbidden memory "
+				"page: your function reads (or writes) past the end. Check "
+				"your loop condition: test the size (n, size, len) BEFORE "
+				"reading the next character.")
+			: L("Accès mémoire interdit : pointeur NULL déréférencé, lecture "
+				"ou écriture après la fin d'un buffer, ou utilisation d'un "
+				"bloc déjà libéré. Les données du test sont collées à une "
+				"page interdite et chaque malloc aussi : le moindre octet de "
+				"trop crashe.",
+				"Forbidden memory access: NULL pointer dereferenced, read or "
+				"write past the end of a buffer, or use of a freed block. "
+				"The test data and every malloc block sit right before a "
+				"forbidden page: one byte too far crashes."));
+	if (sig == SIGABRT)
+		return (L("La libc a détecté une corruption et a tout arrêté : free() "
+			"d'un pointeur qui ne vient pas de malloc (chaîne littérale, "
+			"tableau sur la pile, ptr + i), double free, ou écriture hors "
+			"d'un bloc malloc.",
+			"The libc detected a corruption and aborted: free() of a "
+			"pointer that does not come from malloc (string literal, stack "
+			"array, ptr + i), double free, or a write outside a malloc "
+			"block."));
+	if (sig == SIGALRM)
+		return (L("Ta fonction ne rend jamais la main : boucle infinie "
+			"(indice qui n'avance pas, condition toujours vraie, size_t "
+			"comparé à < 0, i-- sur un unsigned) ou algorithme beaucoup "
+			"trop lent (strlen recalculé à chaque tour, recopie complète à "
+			"chaque ajout).",
+			"Your function never returns: infinite loop (index that does "
+			"not move, condition always true, size_t compared with < 0, "
+			"i-- on an unsigned) or a far too slow algorithm (strlen "
+			"recomputed every turn, full copy on every append)."));
+	if (sig == SIGFPE)
+		return (L("Division ou modulo par zéro (ou INT_MIN / -1).",
+			"Division or modulo by zero (or INT_MIN / -1)."));
+	return (L("Ton code a été tué par un signal.",
+		"Your code was killed by a signal."));
+}
+
+static const char	*explain(const t_test *t, const t_shm *s)
+{
+	switch (g_why)
+	{
+		case W_SIG:
+			return (sig_hint(g_why_sig, t));
+		case W_LEAK:
+			return (L("Des blocs alloués avec malloc ne sont jamais libérés à "
+				"la fin du test (le test libère tout ce que ta fonction "
+				"renvoie). Chaque malloc doit avoir son free, y compris "
+				"dans les chemins d'erreur, et une variable static doit "
+				"être libérée quand on a fini (fin de fichier pour gnl).",
+				"Blocks allocated with malloc are never freed at the end of "
+				"the test (the test frees everything your function returns). "
+				"Every malloc needs its free, error paths included, and a "
+				"static variable must be freed once done (end of file for "
+				"gnl)."));
+		case W_EXIT:
+			return (L("Le processus s'est terminé pendant le test : une "
+				"fonction de bibliothèque ne doit jamais appeler exit().",
+				"The process ended during the test: a library function must "
+				"never call exit()."));
+		case W_VS_CRASH:
+			return (L("La vraie fonction (glibc, BSD, ou la référence pour les "
+				"fonctions sans original) traite cette entrée sans crasher : "
+				"la tienne ne doit pas crasher non plus. « attendu » montre "
+				"ce que renvoie l'originale. Souvent : une taille à 0 doit "
+				"empêcher toute lecture, même avec un pointeur NULL.",
+				"The real function (glibc, BSD, or the reference for "
+				"functions without an original) handles this input without "
+				"crashing: yours must not crash either. \"expected\" shows "
+				"what the original returns. Often: a size of 0 must prevent "
+				"any read, even with a NULL pointer."));
+		case W_VS_SPEC:
+			return (L("La vraie fonction crash sur cette entrée, pas la tienne : "
+				"c'est une protection que le sujet ne demande pas. Ce n'est "
+				"pas une erreur, mais en correction on peut te demander "
+				"pourquoi ton comportement diffère de l'original.",
+				"The real function crashes on this input, yours does not: "
+				"a protection the subject does not ask for. Not an error, "
+				"but in evaluation you may be asked why your behavior "
+				"differs from the original."));
+		case W_VS_DIFF:
+			return (L("Même entrée, résultats différents : « attendu » est ce "
+				"que renvoie la vraie fonction, « obtenu » ce que renvoie la "
+				"tienne (les valeurs sont séparées par |, une par appel du "
+				"test).",
+				"Same input, different results: \"expected\" is what the real "
+				"function returns, \"actual\" what yours returns (values are "
+				"separated by |, one per call of the test)."));
+		case W_VS_DIFF_SPEC:
+			return (L("Résultat différent de l'original sur un cas que le "
+				"standard ne définit pas (comportement indéfini) : ▲ "
+				"seulement, à savoir expliquer.",
+				"Result differs from the original on a case the standard "
+				"does not define (undefined behavior): ▲ only, be ready to "
+				"explain it."));
+		case W_VS_TIMEOUT:
+			return (sig_hint(SIGALRM, t));
+		case W_MALLOC:
+			return (g_why_sig
+				? L("Le test est rejoué en faisant échouer un malloc précis "
+					"(il renvoie NULL) et ta fonction crash : un retour de "
+					"malloc n'est pas vérifié avant d'être utilisé.",
+					"The test is replayed with one malloc failing (it returns "
+					"NULL) and your function crashes: a malloc return value "
+					"is used without being checked.")
+				: has(s->msg, "fuite") || has(s->msg, "leak")
+				? L("Le test est rejoué en faisant échouer un malloc précis : "
+					"ta fonction renvoie bien une erreur mais ne libère pas ce "
+					"qu'elle avait déjà alloué avant l'échec.",
+					"The test is replayed with one malloc failing: your "
+					"function reports the error but does not free what it had "
+					"already allocated before the failure.")
+				: L("Le test est rejoué en faisant échouer un malloc précis : "
+					"ta fonction doit alors libérer ce qu'elle a déjà alloué "
+					"et renvoyer NULL (ou l'erreur prévue par le sujet).",
+					"The test is replayed with one malloc failing: your "
+					"function must then free what it already allocated and "
+					"return NULL (or the error the subject asks for)."));
+		case W_ASSERT:
+			if (has(s->msg, "double free") || has(s->msg, "free()"))
+				return (L("Tu libères deux fois le même bloc, ou un pointeur qui "
+					"n'est pas le début d'un bloc malloc (free(ptr + i), free "
+					"d'une chaîne littérale ou d'un tableau).",
+					"You free the same block twice, or a pointer that is not "
+					"the start of a malloc block (free(ptr + i), free of a "
+					"string literal or an array)."));
+			if (has(s->msg, "bloc") || has(s->msg, "block")
+				|| has(s->msg, "malloc"))
+				return (L("Problème d'allocation : le bloc renvoyé doit venir de "
+					"malloc et contenir au moins la chaîne + 1 octet pour le "
+					"'\\0'. Compte bien la longueur avant le malloc.",
+					"Allocation problem: the returned block must come from "
+					"malloc and hold at least the string + 1 byte for the "
+					"'\\0'. Count the length carefully before malloc."));
+			return (L("Une vérification du test a échoué : compare « attendu » "
+				"et « obtenu » pour l'entrée indiquée. La ligne du fichier de "
+				"test donne la vérification exacte.",
+				"A check of the test failed: compare \"expected\" and "
+				"\"actual\" for the given input. The test file line gives "
+				"the exact check."));
+	}
+	return (NULL);
+}
+
+/* ------------------------------------------------- source of the test -- */
+static const char	*k_test_macros[] = {"TEST(", "SPEC_TEST(", "VS(",
+	"VS_SPEC(", "MTEST(", NULL};
+
+static int	is_test_line(const char *l)
+{
+	while (*l == ' ' || *l == '\t')
+		l++;
+	for (int i = 0; k_test_macros[i]; i++)
+		if (!strncmp(l, k_test_macros[i], strlen(k_test_macros[i])))
+			return (1);
+	return (0);
+}
+
+/* braces of one line, outside string and char literals */
+static int	brace_delta(const char *l, int *seen)
+{
+	int		d = 0;
+	char	q = 0;
+
+	for (; *l; l++)
+	{
+		if (q)
+		{
+			if (*l == '\\' && l[1])
+				l++;
+			else if (*l == q)
+				q = 0;
+		}
+		else if (*l == '"' || *l == '\'')
+			q = *l;
+		else if (*l == '/' && l[1] == '/')
+			break ;
+		else if (*l == '{')
+		{
+			d++;
+			*seen = 1;
+		}
+		else if (*l == '}')
+			d--;
+	}
+	return (d);
+}
+
+/* the test's lines (at most 18), in *out; returns 0 if unreadable */
+static int	test_source(const t_test *t, t_sb *out, int *macro)
+{
+	FILE	*f = fopen(t->file, "r");
+	char	line[512];
+	int		n = 0;
+	int		depth = 0;
+	int		seen = 0;
+	int		kept = 0;
+
+	*macro = 0;
+	if (!f)
+		return (0);
+	while (fgets(line, sizeof(line), f) && ++n < t->line)
+		;
+	if (n != t->line)
+	{
+		fclose(f);
+		return (0);
+	}
+	if (!is_test_line(line))
+	{
+		/* generated by a macro (IS_TESTS, FILE_TEST, INT_SUITE...) */
+		*macro = 1;
+		line[strcspn(line, "\n")] = 0;
+		sb_add(out, "%s\n", line);
+		fclose(f);
+		return (1);
+	}
+	do
+	{
+		line[strcspn(line, "\n")] = 0;
+		for (char *p = line; *p; p++)
+			if (*p == '\t')
+				*p = ' ';
+		if (kept < 18)
+			sb_add(out, "%s\n", line);
+		else if (kept == 18)
+			sb_add(out, "…\n");
+		kept++;
+		depth += brace_delta(line, &seen);
+		if (seen && depth <= 0)
+			break ;
+	} while (fgets(line, sizeof(line), f) && kept < 60);
+	fclose(f);
+	return (1);
+}
+
+/* PICK(ft_x, r_x)(args) in the source -> "ft_x(args)" */
+static int	call_from_pick(const char *src, char *out, size_t osz)
+{
+	const char	*p = strstr(src, "PICK(");
+	const char	*name;
+	size_t		nl;
+	int			depth;
+	const char	*a;
+
+	if (!p)
+		return (0);
+	name = p + 5;
+	while (*name == ' ')
+		name++;
+	nl = strcspn(name, ", )");
+	p = name + nl;
+	depth = 1;
+	while (*p && depth)
+	{
+		if (*p == '(')
+			depth++;
+		else if (*p == ')')
+			depth--;
+		p++;
+	}
+	if (*p != '(')
+		return (0);
+	a = p;
+	depth = 0;
+	do
+	{
+		if (*p == '(')
+			depth++;
+		else if (*p == ')')
+			depth--;
+		p++;
+	} while (*p && depth);
+	if (depth)
+		return (0);
+	snprintf(out, osz, "%.*s%.*s", (int)nl, name, (int)(p - a), a);
+	return (1);
+}
+
+/* first call of the student's function in the test source:
+   "p = ft_calloc(4, 8);" -> "ft_calloc(4, 8)"                             */
+static int	call_from_source(const char *src, char *out, size_t osz)
+{
+	static const char	*prefixes[] = {"ft_", "get_next_line(", NULL};
+
+	for (int i = 0; prefixes[i]; i++)
+	{
+		const char	*p = src;
+
+		while ((p = strstr(p, prefixes[i])))
+		{
+			const char	*q = p;
+			int			depth = 0;
+
+			if (p > src && (isalnum((unsigned char)p[-1]) || p[-1] == '_'))
+			{
+				p++;
+				continue ;
+			}
+			while (isalnum((unsigned char)*q) || *q == '_')
+				q++;
+			if (*q != '(')
+			{
+				p = q;
+				continue ;
+			}
+			do
+			{
+				if (*q == '(')
+					depth++;
+				else if (*q == ')')
+					depth--;
+				else if (*q == '\n')
+					break ;
+				q++;
+			} while (*q && depth);
+			if (!depth)
+			{
+				snprintf(out, osz, "%.*s", (int)(q - p), p);
+				return (1);
+			}
+			p = q;
+		}
+	}
+	return (0);
+}
+
+/* INPUT that already is a C call: "ft_printf(\"%d\", 42)" */
+static int	call_from_input(const char *in, char *out, size_t osz)
+{
+	const char	*p = in;
+	int			depth = 0;
+
+	if (!in || !*in || has(in, "·") || has(in, "(sans") || has(in, "gardé")
+		|| has(in, "guarded") || has(in, "[") || has(in, ", fd)"))
+		return (0);
+	if (!(isalpha((unsigned char)*p) || *p == '_'))
+		return (0);
+	while (isalnum((unsigned char)*p) || *p == '_')
+		p++;
+	if (*p != '(')
+		return (0);
+	for (const char *q = p; *q; q++)
+	{
+		if (*q == '(')
+			depth++;
+		else if (*q == ')' && --depth == 0 && q[1])
+			return (0);
+	}
+	if (depth)
+		return (0);
+	snprintf(out, osz, "%s", in);
+	return (1);
+}
+
+static const char	*short_val(const char *v, char *buf, size_t sz)
+{
+	if (!v || !*v)
+		return ("?");
+	snprintf(buf, sz, "%.*s%s", 40, v, strlen(v) > 40 ? "…" : "");
+	return (buf);
+}
+
+static void	code_block(t_sb *b, const char *label, const char *text)
+{
+	const char	*p = text;
+	int			first = 1;
+
+	while (*p)
+	{
+		size_t	l = strcspn(p, "\n");
+
+		sb_add(b, "        %s%-9s%s %s│%s %.*s\n", C_GRY, first ? label : "",
+			C_RST, C_PHD, C_RST, (int)l, p);
+		first = 0;
+		p += l + (p[l] == '\n');
+	}
+}
+
+/* main.c to paste in your own project */
+static void	main_block(t_sb *b, const char *call, const t_shm *s,
+				const char *exp, const char *got)
+{
+	t_sb	m = {0};
+	char	e[64];
+	char	g[64];
+	int		gnl = !strcmp(g_proj.header, "get_next_line.h");
+
+	if (!exp && s && s->failed)
+		exp = s->exp;
+	if (!got && s && s->failed)
+		got = s->got;
+	sb_add(&m, "#include \"%s\"\n#include <stdio.h>\n", g_proj.header);
+	if (gnl)
+		sb_add(&m, "#include <fcntl.h>\n");
+	sb_add(&m, "\nint\tmain(void)\n{\n");
+	if (gnl)
+	{
+		sb_add(&m, "\tint\t\tfd = open(\"test.txt\", O_RDONLY);  /* %s */\n"
+			"\tchar\t*line;\n\n"
+			"\twhile ((line = get_next_line(fd)))\n\t{\n"
+			"\t\tprintf(\"[%%s]\", line);\n\t\tfree(line);\n\t}\n"
+			"\treturn (0);\n}\n",
+			L("mets-y le contenu du test", "put the test content in it"));
+	}
+	else
+	{
+		sb_add(&m, "\t%s;", call);
+		if (exp && *exp)
+			sb_add(&m, L("  /* attendu : %s · obtenu : %s */",
+				"  /* expected: %s · actual: %s */"),
+				short_val(exp, e, sizeof(e)), short_val(got, g, sizeof(g)));
+		sb_add(&m, "\n");
+		if (!strncmp(call, "ft_printf(", 10))
+			sb_add(&m, "\t%s;  /* %s */\n", call + 3,
+				L("la vraie, pour comparer", "the real one, to compare"));
+		sb_add(&m, "\treturn (0);\n}\n");
+	}
+	for (char *p = m.s; p && *p; p++)
+		if (*p == '\t')
+			*p = ' ';
+	code_block(b, "main.c", m.s);
+	if (gnl)
+		sb_add(b, "        %-9s %scc -g -D BUFFER_SIZE=42 main.c "
+			"get_next_line.c get_next_line_utils.c && valgrind ./a.out%s\n",
+			"", C_GRY, C_RST);
+	else
+		sb_add(b, "        %-9s %scc -g main.c %s && valgrind ./a.out%s\n", "",
+			C_GRY, g_proj.archive, C_RST);
+	free(m.s);
+}
+
+/* token understood by `torture <project> <dir> --repro TOKEN` */
+static void	repro_block(t_sb *b, const t_test *t)
+{
+	const char	*label = NULL;
+	char		tok[256];
+	size_t		n;
+
+	if (!o.repro_cmd || t->idx < 0)
+		return ;
+	for (int i = 0; i < NFUNCS; i++)
+		if (!strcmp(g_funcs[i].name, t->func))
+			label = g_funcs[i].label;
+	n = (size_t)snprintf(tok, sizeof(tok), "%s#%d", base_name(t->file), t->idx);
+	if (g_fail_k)
+		n += (size_t)snprintf(tok + n, sizeof(tok) - n, "m%d", g_fail_k);
+	n += (size_t)snprintf(tok + n, sizeof(tok) - n, "@%s", t->func);
+	if (label && !strncmp(label, "BUFFER_SIZE=", 12))
+		snprintf(tok + n, sizeof(tok) - n, "=%s", label + 12);
+	else if (label && (has(label, "défaut") || has(label, "default")))
+		snprintf(tok + n, sizeof(tok) - n, "=def");
+	sb_add(b, "        %s%-9s%s %s%s --repro '%s'%s\n", C_GRY,
+		L("rejouer", "replay"), C_RST, C_B, o.repro_cmd, tok, C_RST);
+	sb_wrap(b, "", L("recompile ce test seul avec ton code (sans fork, malloc "
+		"normal) et le lance sous valgrind si installé : la ligne fautive de "
+		"ton code s'affiche. Ajoute --gdb pour le déboguer.",
+		"rebuilds this single test with your code (no fork, plain malloc) "
+		"and runs it under valgrind when installed: the faulty line of your "
+		"code is shown. Add --gdb to debug it."), C_GRY);
+}
+
+static void	verbose_extra(t_sb *b, const t_test *t, const t_shm *s,
+				const char *exp, const char *got)
+{
+	const char	*w = explain(t, s);
+	t_sb		src = {0};
+	int			macro = 0;
+	char		call[600];
+	int			has_call = 0;
+
+	sb_add(b, "%c", DETAIL_SEP);
+	if (w)
+		sb_wrap(b, L("pourquoi", "why"), w, "");
+	if (test_source(t, &src, &macro) && src.s)
+	{
+		code_block(b, L("test", "test"), src.s);
+		if (macro)
+			sb_add(b, "        %-9s %s%s%s\n", "", C_GRY, L("(test généré par "
+				"une macro : sa définition est plus haut dans ce fichier)",
+				"(test generated by a macro: its definition is higher in "
+				"this file)"), C_RST);
+	}
+	if (s && call_from_input(s->input, call, sizeof(call)))
+		has_call = 1;
+	else if (src.s && call_from_pick(src.s, call, sizeof(call)))
+		has_call = 1;
+	else if (src.s && !macro && call_from_source(src.s, call, sizeof(call)))
+		has_call = 1;
+	if (has_call)
+		sb_add(b, "        %s%-9s%s %s%s;%s\n", C_GRY, L("appel", "call"),
+			C_RST, C_B, call, C_RST);
+	if (has_call || !strcmp(g_proj.header, "get_next_line.h"))
+		main_block(b, has_call ? call : "", s, exp, got);
+	repro_block(b, t);
+	free(src.s);
+}
+
 static char	*make_detail(const t_test *t, int idx, t_res res, const char *head,
 			const t_shm *s, const char *exp, const char *got)
 {
@@ -599,6 +1182,8 @@ static char	*make_detail(const t_test *t, int idx, t_res res, const char *head,
 		detail_shm(&b, s, 1);
 	detail_kv(&b, L("attendu", "expected"), exp, C_GRN);
 	detail_kv(&b, L("obtenu", "actual"), got, C_RED);
+	verbose_extra(&b, t, s, exp, got);
+	why(W_NONE, 0, 0);
 	return (b.s);
 }
 
@@ -617,18 +1202,21 @@ static void	eval_normal(const t_test *t, int idx, t_result *r)
 	{
 		r->res = bad;
 		set_glyph(r, a.sig == SIGALRM ? "T" : "S");
+		why(W_SIG, a.sig, 0);
 		r->detail = make_detail(t, idx, bad, sig_name(a.sig), &a.s, NULL, NULL);
 	}
 	else if (a.s.failed)
 	{
 		r->res = bad;
 		set_glyph(r, a.s.leaks ? "L" : "✘");
+		why(a.s.leaks ? W_LEAK : W_ASSERT, 0, 0);
 		r->detail = make_detail(t, idx, bad, NULL, &a.s, NULL, NULL);
 	}
 	else if (!a.s.done)
 	{
 		r->res = bad;
 		set_glyph(r, "E");
+		why(W_EXIT, 0, 0);
 		r->detail = make_detail(t, idx, bad,
 				L("le processus s'est arrêté (exit() appelé ?)", "process stopped (exit() called?)"), &a.s, NULL, NULL);
 	}
@@ -655,12 +1243,14 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 	{
 		r->res = R_FAIL;
 		set_glyph(r, a.s.leaks ? "L" : "✘");
+		why(a.s.leaks ? W_LEAK : W_ASSERT, 0, 0);
 		r->detail = make_detail(t, idx, R_FAIL, NULL, &a.s, NULL, NULL);
 	}
 	else if (fc && a.sig == SIGALRM)
 	{
 		r->res = R_FAIL;
 		set_glyph(r, "T");
+		why(W_VS_TIMEOUT, SIGALRM, 0);
 		r->detail = make_detail(t, idx, R_FAIL, sig_name(a.sig), &a.s,
 				rc ? L("(l'originale crash)", "(reference crashes)") : b.s.out, NULL);
 	}
@@ -676,6 +1266,7 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 			sig_name(a.sig));
 		r->res = R_FAIL;
 		set_glyph(r, "S");
+		why(W_VS_CRASH, a.sig, 0);
 		r->detail = make_detail(t, idx, R_FAIL, head, &a.s,
 				b.s.out[0] ? b.s.out : L("(pas de crash)", "(no crash)"), "CRASH");
 	}
@@ -688,6 +1279,7 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 			"not required by the subject"), sig_name(b.sig));
 		r->res = R_SPEC;
 		set_glyph(r, "▲");
+		why(W_VS_SPEC, b.sig, 0);
 		r->detail = make_detail(t, idx, R_SPEC, head, &a.s, "CRASH",
 				a.s.out[0] ? a.s.out : L("(pas de crash)", "(no crash)"));
 	}
@@ -695,6 +1287,7 @@ static void	eval_vs(const t_test *t, int idx, t_result *r)
 	{
 		r->res = t->spec ? R_SPEC : R_FAIL;
 		set_glyph(r, t->spec ? "▲" : "✘");
+		why(t->spec ? W_VS_DIFF_SPEC : W_VS_DIFF, 0, 0);
 		r->detail = make_detail(t, idx, r->res,
 				t->spec ? L("résultat différent de l'originale (comportement "
 				"indéfini, spéculatif)",
@@ -736,6 +1329,7 @@ static void	eval_malloc(const t_test *t, int idx, t_result *r)
 					L("quand le malloc n°%d/%d renvoie NULL :", "when malloc #%d/%d returns NULL:"), k, n);
 			r->res = R_FAIL;
 			set_glyph(r, a.s.leaks ? "L" : "M");
+			why(W_MALLOC, a.sig, k);
 			r->detail = make_detail(t, idx, R_FAIL, head, &a.s, NULL, NULL);
 			return ;
 		}
@@ -1679,14 +2273,30 @@ static void	run_function(int fi, int *ti)
 	{
 		if (!res[i].detail)
 			continue ;
-		log_plain(res[i].detail);
-		if (o.verbose || (shown < o.max_details && (res[i].res == R_FAIL
-					|| o.spec)))
 		{
-			fputs(res[i].detail, stdout);
-			shown++;
+			char	*sep = strchr(res[i].detail, DETAIL_SEP);
+
+			if (sep)
+				*sep = 0;
+			log_plain(res[i].detail);
+			if (sep)
+				log_plain(sep + 1);
+			if (o.verbose || (shown < o.max_details && (res[i].res == R_FAIL
+						|| o.spec)))
+			{
+				fputs(res[i].detail, stdout);
+				if (sep && o.verbose)
+					fputs(sep + 1, stdout);
+				shown++;
+				if (sep)
+					*sep = DETAIL_SEP;
+				free(res[i].detail);
+				continue ;
+			}
+			if (sep)
+				*sep = DETAIL_SEP;
 		}
-		else if (res[i].res == R_SPEC && shown < o.max_details + 2)
+		if (res[i].res == R_SPEC && shown < o.max_details + 2)
 		{
 			/* compact one-liner for speculative warnings */
 			char	*nl = strchr(res[i].detail, '\n');
@@ -2158,6 +2768,8 @@ int	main(int ac, char **av)
 			o.no_section = 1;
 		else if (!strcmp(a, "--name") && i + 1 < ac)
 			o.names = av[++i];
+		else if (!strcmp(a, "--repro-cmd") && i + 1 < ac)
+			o.repro_cmd = av[++i];
 		else
 		{
 			usage();

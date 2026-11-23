@@ -148,7 +148,7 @@ __attribute__((constructor)) static void	register_custom(void)
 		if (c->size || c->path[0])
 		{
 			zft_register(STR(GNL_SUITE), c->name, K_NORMAL, 0,
-				g_fn[g_ncustom], __FILE__, __LINE__);
+				g_fn[g_ncustom], __FILE__, __LINE__, -1);
 			g_ncustom++;
 		}
 		list += l + (list[l] == '\n');

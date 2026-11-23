@@ -100,6 +100,11 @@ def parser(lang: str) -> argparse.ArgumentParser:
     result.add_argument("--no-norm", action="store_true", help=t("skip norminette", "ignorer norminette"))
     result.add_argument("--no-hidden", action="store_true", help=t("ignore hidden files and folders", "ignorer les fichiers et dossiers cachés"))
     result.add_argument("--no-color", action="store_true", help=t("disable colors", "désactiver les couleurs"))
+    result.add_argument("--repro", metavar="TEST", help=t(
+        "rebuild one failing test alone with your code and run it under valgrind (TEST is printed by -v)",
+        "recompiler un test qui échoue seul avec ton code et le lancer sous valgrind (TEST est donné par -v)"))
+    result.add_argument("--gdb", action="store_true", help=t(
+        "with --repro: run the test under gdb", "avec --repro : lancer le test sous gdb"))
     return result
 
 
@@ -133,6 +138,9 @@ def execute(ctx: Context, project: Project) -> int:
         ctx.stats.unlink(missing_ok=True)
         try:
             run_header(project, ctx.options)
+            if ctx.options.repro:
+                from .repro import run as run_repro
+                return run_repro(ctx, project)
             if ctx.options.checks:
                 project.checks(ctx)
             return project.run(ctx)
@@ -175,7 +183,10 @@ def main(argv: list[str] | None = None) -> int:
                           efficiency_target=50 if args.efficiency_target is None else args.efficiency_target,
                           seed=args.seed, part=args.part, functions=args.func, timeout=args.timeout,
                           no_color=args.no_color, ignore_hidden=args.no_hidden,
-                          files=tuple(item for value in args.files for item in value.split(",") if item.strip()))
+                          files=tuple(item for value in args.files for item in value.split(",") if item.strip()),
+                          repro=args.repro, gdb=args.gdb)
+        if args.gdb and not args.repro:
+            cli.error("--gdb needs --repro")
         if args.target is None and sys.stdin.isatty() and sys.stdout.isatty():
             project, options = interactive(options, registry)
         else:

@@ -93,7 +93,9 @@ torture ps -f errors,perf500 -v      # quelques suites push_swap, tous les déta
 | Option | Effet |
 |---|---|
 | `-s`, `--speculative` | les erreurs spéculatives (▲) font échouer |
-| `-v`, `--verbose` | affiche le détail de chaque échec |
+| `-v`, `--verbose` | chaque échec en entier : pourquoi, le code du test, l'appel, un `main.c`, la commande `--repro` |
+| `--repro TEST` | recompile un test qui échoue seul avec ton code et le lance sous valgrind (`TEST` est donné par `-v`) |
+| `--gdb` | avec `--repro` : lance le test sous gdb |
 | `-e`, `--efficiency [N]` | compare chaque fonction à un temps « parfait » calculé pour cette machine, jauge en bas, objectif N % (défaut 50) |
 | `-t`, `--target N` | objectif d'efficacité en % (1–100) ; active `-e` |
 | `-f`, `--func LISTE` | libft : `ft_split,itoa` · printf : `%d,%s,flag -,précision .` · gnl : n'importe quels BUFFER_SIZE, `1,42,77,100k,def` · push_swap : `errors,simple,bench,perf100,checker…` |
@@ -317,6 +319,49 @@ Avec `-e`, l'efficacité de push_swap n'est pas un temps : c'est ta **moyenne
 d'opérations** sur 20 listes de 100 et 8 listes de 500 nombres, comparée au seuil
 « excellent » du sujet (100 % = 700 ou 5500 opérations). L'objectif à 50 % (défaut)
 correspond donc à 1400 et 11 000 opérations.
+
+## Comprendre une erreur (`-v`) et la rejouer (`--repro`)
+
+Avec `-v`, chaque ✘ / ▲ est accompagné de tout ce qu'il faut pour la comprendre et la
+reproduire :
+
+```
+      ✘ #12 « dst NULL, size = 0 »  t_part1.c:429
+        ta fonction crash (SIGSEGV · segmentation fault) alors que l'originale ne crash pas
+        attendu   3
+        obtenu    CRASH
+        pourquoi  La vraie fonction (glibc, BSD, ou la référence pour les
+                  fonctions sans original) traite cette entrée sans crasher : …
+        test      │ VS(ft_strlcat, "dst NULL, size = 0")
+                  │ {
+                  │  OUT("%zu", PICK(ft_strlcat, r_strlcat)(NULL, "abc", 0));
+                  │ }
+        appel     ft_strlcat(NULL, "abc", 0);
+        main.c    │ #include "libft.h"
+                  │ …
+                  │  ft_strlcat(NULL, "abc", 0);  /* attendu : 3 · obtenu : CRASH */
+                  cc -g main.c libft.a && valgrind ./a.out
+        rejouer   torture libft ~/libft --repro 't_part1.c#97@ft_strlcat'
+```
+
+- **pourquoi** : ce que veut dire l'erreur et quoi regarder dans ton code, selon le type
+  d'échec (segfault, lecture après la fin d'un buffer gardé, abort, timeout, fuite,
+  double free, malloc non protégé, résultat différent de l'original, protection ▲…).
+- **test** : le code source du test (ou la ligne de macro qui le génère).
+- **appel** et **main.c** : l'appel qui déclenche l'erreur et un main à coller dans ton
+  projet (pour get_next_line : un main qui lit `test.txt`).
+- **rejouer** : `--repro` recompile **ce test seul** avec ton code, sans fork et avec le
+  vrai malloc, puis le lance sous **valgrind** s'il est installé : la ligne fautive de
+  ton code s'affiche. Les données du test restent collées à une page interdite (une
+  lecture de trop crashe toujours), le même malloc défaillant est reproduit (`mK` dans le
+  jeton), et la même graine aléatoire. Ajoute `--gdb` pour le déboguer pas à pas.
+
+```bash
+torture libft ~/libft --repro 't_part1.c#97@ft_strlcat'          # valgrind
+torture libft ~/libft --repro 't_part1.c#97@ft_strlcat' --gdb    # gdb
+```
+
+Sans `-v`, le rapport reste compact ; `ftorture.log` contient toujours tous les détails.
 
 ## Ta fonction face à la vraie
 

@@ -40,10 +40,13 @@ typedef struct s_test
 	const char	*file;
 	int			line;
 	int			seq;
+	int			idx;	/* __COUNTER__ of the TEST in its file: lets
+						   `torture ... --repro file#idx` rebuild it alone.
+						   -1 for tests registered at run time.          */
 }	t_test;
 
 void	zft_register(const char *func, const char *name, t_kind kind, int spec,
-			void (*fn)(void), const char *file, int line);
+			void (*fn)(void), const char *file, int line, int idx);
 
 # define ZFT_CAT2(a, b) a##b
 # define ZFT_CAT(a, b) ZFT_CAT2(a, b)
@@ -53,7 +56,7 @@ void	zft_register(const char *func, const char *name, t_kind kind, int spec,
 	static void ZFT_CAT(zt_fn_, N)(void); \
 	__attribute__((constructor)) static void ZFT_CAT(zt_reg_, N)(void) \
 	{ zft_register(#F, NAME, KIND, SPEC, ZFT_CAT(zt_fn_, N), \
-		__FILE__, __LINE__); } \
+		__FILE__, __LINE__, N); } \
 	static void ZFT_CAT(zt_fn_, N)(void)
 
 /* Plain test with assertions.                                              */
