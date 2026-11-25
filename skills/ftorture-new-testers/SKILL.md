@@ -13,7 +13,7 @@ Use this skill when changing **ftorture**, not a student's submission. Installat
 |---|---|
 | `ftorture/cli.py` | Argument validation, dependency checks, checkout lock, lifecycle and interruption handling |
 | `ftorture/projects/base.py` | `Project` metadata and `validate`, `checks`, `run`, `cleanup` hooks |
-| `ftorture/projects/__init__.py` | Explicit `PROJECTS` registry, aliases and header-based detection; also drives the menu |
+| `ftorture/projects/__init__.py` | Explicit `PROJECTS` registry, aliases and header-based detection; also drives the menu (`PythonProject` subclasses appear in the PYTHON MODULES submenu of `ftorture/ui.py`, not in the main menu) |
 | `ftorture/registry.py` | Unified registry, collision validation, bundled detection and custom discovery for CLI/TUI |
 | `ftorture/projects/custom.py` | Versioned user manifests and command-suite lifecycle, separate from native C checks |
 | `ftorture/projects/archive.py` | Makefile/archive building and linking; compare `libft.py`/`printf.py` |
@@ -53,7 +53,7 @@ Reuse `check_files(session, allowed_predicate)`, `check_readme`, `check_norm`, `
 1. Define `SPECS: tuple[ExerciseSpec, ...]` in `ftorture/projects/<key>.py` describing each exercise's directory, expected `.py` files, authorized built-ins (`frozenset[str]`), `allowed_imports`, `allow_classes`, `allow_main_block`, `require_main_block`, and `require_type_hints`.
 2. Define `SUITES: tuple[PySuite, ...]` with `PyTestCase` entries. Always execute student code in isolated child `python3` subprocesses via `eval_module_code`, `expect_json_outcome`, or `run_script_file` from `ftorture/projects/python.py`: they set `PYTHONDONTWRITEBYTECODE=1` (never polluting student folders with `__pycache__`), use `start_new_session=True` for clean timeout/Ctrl-C teardown, and load modules via `importlib.util.spec_from_file_location`.
 3. Instantiate `PROJECT = PythonProject(key=..., name=..., header="", subject=..., aliases=..., specs=SPECS, suites=SUITES, check_naming_conventions=...)` and register it in `ftorture/projects/__init__.py`. `PythonProject.matches()` auto-detects the project from `SPECS` marker files (no header needed), `requires_compiler=False` skips C tool checks and adapts the TUI options screen (`flake8 / mypy`, no `-e`), and `repro.py` rejects `--repro` cleanly.
-4. Add menu descriptions/taglines in `ftorture/ui.py` and add unit/integration tests in `tests/test_python_projects.py` (update the custom-suite shortcut index in `tests/test_tui.py` when adding bundled projects).
+4. Add menu descriptions/taglines in `ftorture/ui.py` and add unit/integration tests in `tests/test_python_projects.py` (update the custom-suite shortcut index in `tests/test_tui.py` when adding a bundled C project; a new Python module only adds a row to the PYTHON MODULES submenu).
 
 ## Write and link C suites
 

@@ -22,7 +22,7 @@ torture --help
 
 ## Run and narrow failures
 
-Use explicit project and directory arguments for automation; quote paths with spaces. With no project argument in a terminal, the original retro menu offers project selection (arrows, j/k, or `1..N` shortcuts), an editable path with Tab completion, and option checkboxes (`-s`, `-v`, `-e` for C projects, checks, `-c` chill mode, norminette or `flake8 / mypy`, and `--no-hidden`). CLI options initialize those checkboxes; Space toggles them and Enter on the launch row starts testing.
+Use explicit project and directory arguments for automation; quote paths with spaces. With no project argument in a terminal, the original retro menu offers project selection (arrows, j/k, or `1..N` shortcuts; Python modules are grouped under one PYTHON MODULES entry that opens its own menu, `q`/BACK returns), an editable path with Tab completion, and option checkboxes (`-s`, `-v`, `-e` for C projects, checks, `-c` chill mode, norminette or `flake8 / mypy`, and `--no-hidden`). CLI options initialize those checkboxes; Space toggles them and Enter on the launch row starts testing.
 
 ```bash
 torture libft /path/to/libft -f strlen,split -v --lang en --no-color
