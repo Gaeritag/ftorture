@@ -279,6 +279,12 @@ inputs: a text file of yours, read line by line and compared with its content, o
 one without `\n`. With `--file`, the default timeout grows with the file size and shrinks
 with the `BUFFER_SIZE` (10 s + ~10 µs per `read()`, 10 min at most); `--timeout` overrides it.
 
+**The Bible**: every pass also reads the King James Bible (4.3 MB, 99 594 lines, public
+domain, `data/bible-kjv.txt.gz`), a real big text file, with a size that makes sense for
+the buffer: the whole book from 32 to 10 000 (and without `-D`), its first
+`BUFFER_SIZE × 50 000` bytes below 32, its first 100 KB above 10 000 (a stash that size
+copied after every line would mean gigabytes of copies).
+
 **Small `BUFFER_SIZE`s without waiting 10 minutes**: very long lines (100 000 and 300 000
 characters) are cut to 4096 `read()` calls, so 4096 characters with `BUFFER_SIZE=1`, still
 far beyond the buffer. A stash rebuilt by a `strjoin` after every `read()` is quadratic:

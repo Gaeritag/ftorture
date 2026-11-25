@@ -1,5 +1,6 @@
 """Source-only strategy: one isolated binary per BUFFER_SIZE and part."""
 from pathlib import Path
+import gzip
 import re
 
 from .base import Project
@@ -95,6 +96,18 @@ class GnlProject(Project):
             largest = max(largest, size or Path(path).stat().st_size)
         return "\n".join(lines), largest
 
+    def bible(self, ctx: Context) -> list[str]:
+        """data/bible-kjv.txt.gz decompressed once into build/: -D Z_BIBLE."""
+        source = ctx.root / "data/bible-kjv.txt.gz"
+        if not source.is_file():
+            return []
+        target = ctx.build / "bible-kjv.txt"
+        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+            with gzip.open(source, "rb") as compressed:
+                ctx.build.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(compressed.read())
+        return ["-D", f'Z_BIBLE="{target}"']
+
     @staticmethod
     def timeout(size: str, largest: int) -> int:
         """Default per-test timeout of one pass: 10 s, more for a big --file read
@@ -112,6 +125,7 @@ class GnlProject(Project):
             raise RunnerError(ctx.message("No BUFFER_SIZE selected or bonus sources missing.",
                                           "Aucun BUFFER_SIZE sélectionné ou sources bonus absentes."))
         flags = ctx.engine_flags("gnl")
+        bible = self.bible(ctx)
         files, largest = self.files(ctx)
         if files:
             ctx.env["FTORTURE_GNL_FILES"] = files
@@ -151,7 +165,7 @@ class GnlProject(Project):
                 tests.append(ctx.root / "src/gnl/t_gnl_bonus.c")
             executable = out / "tester"
             if not ctx.compile([*flags, "-D", f"Z_BS={-1 if size == 'def' else size}",
-                         "-D", f"GNL_SUITE={key}", *slot, ctx.build / "engine.o", ctx.build / "memtrack.o",
+                         "-D", f"GNL_SUITE={key}", *slot, *bible, ctx.build / "engine.o", ctx.build / "memtrack.o",
                          *tests, *objects, "-Wl,--wrap=malloc", "-Wl,--wrap=free", "-Wl,--wrap=read",
                          "-lm", "-o", executable], out / "link.log"):
                 failed = True

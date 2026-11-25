@@ -567,6 +567,9 @@ class IntegrationTests(unittest.TestCase):
                                 if line.startswith("TOTAL:"))
             self.assertIn("0 failed, 0 speculative, 0 missing", total)
             self.assertEqual(result.stdout.count("RESULT"), 1)
+            # the King James Bible from data/ is decompressed and read by every pass
+            bible = ROOT / "build/gnl/bible-kjv.txt"
+            self.assertEqual(bible.read_bytes().count(b"\n"), 99594)
 
     def push_swap_fixture(self, directory: Path, broken: bool = False) -> None:
         shutil.copytree(ROOT / "tests/fixtures/push_swap", directory, dirs_exist_ok=True)

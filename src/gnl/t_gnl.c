@@ -11,6 +11,7 @@
 #include "gnl.h"
 
 /* BUFFER_SIZE used to build lines around the buffer size */
+#define T_(fr, en) (zft_en() ? (en) : (fr))
 #define BS (Z_BS > 0 ? Z_BS : 42)
 /* sizes that stay reasonable even with BUFFER_SIZE=10000000 */
 #define SMALL_BS (Z_BS > 0 && Z_BS <= 100000)
@@ -164,6 +165,61 @@ TEST(GNL_SUITE, "gros fichier (~80 Ko, longueurs variées)")
 	EXPECT_FD(fd, d, k, "gros fichier");
 	close(fd);
 }
+
+/* The King James Bible (4.3 MB, 99 594 lines, built by the runner from
+   data/bible-kjv.txt.gz): a real big text file, with a buffer that makes
+   sense for it. 32 to 10 000 (and the default): the whole book. Below 32:
+   its first BUFFER_SIZE x 50 000 bytes, so 1 byte per read() stays quick.
+   Above 10 000: its first 100 KB, since a buffer that big keeps up to a
+   buffer of text in the stash, and a stash moved after every line copies
+   it 99 594 times (100K: 5 GB). Each cut is at a line end.             */
+#ifdef Z_BIBLE
+# if Z_BS < 0 || (Z_BS >= 32 && Z_BS <= 10000)
+#  define BIBLE_NAME "la Bible entière (King James, 4,3 Mo)"
+#  define BIBLE_KEEP ((size_t)-1)
+# elif Z_BS < 32
+#  define BIBLE_NAME "la Bible, début (BUFFER_SIZE × 50 000 octets)"
+#  define BIBLE_KEEP ((size_t)Z_BS * 50000)
+# else
+#  define BIBLE_NAME "la Bible, début (100 Ko : buffer > 10 000)"
+#  define BIBLE_KEEP ((size_t)100000)
+# endif
+
+TEST(GNL_SUITE, BIBLE_NAME)
+{
+	int			in = open(Z_BIBLE, O_RDONLY);
+	off_t		size = in >= 0 ? lseek(in, 0, SEEK_END) : -1;
+	char		*d;
+	size_t		n = 0;
+	size_t		keep;
+	int			fd;
+
+	CHECK(size > 0, "%s : %s", Z_BIBLE, T_("introuvable (tester)", "missing (tester)"));
+	lseek(in, 0, SEEK_SET);
+	d = malloc((size_t)size);
+	while (d && n < (size_t)size)
+	{
+		ssize_t	r = read(in, d + n, (size_t)size - n);
+
+		if (r <= 0)
+			break ;
+		n += (size_t)r;
+	}
+	close(in);
+	keep = n;
+	if (BIBLE_KEEP < n)
+	{
+		keep = BIBLE_KEEP;
+		while (keep < n && d[keep - 1] != '\n')
+			keep++;
+	}
+	fd = gnl_file(d, keep);
+	EXPECT_FD(fd, d, keep, keep == n ? "la Bible (King James)"
+		: "le début de la Bible (King James)");
+	close(fd);
+	free(d);
+}
+#endif
 
 /* ------------------------------------------------------- other fds ---- */
 TEST(GNL_SUITE, "entrée standard (fd 0)")

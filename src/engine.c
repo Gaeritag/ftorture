@@ -100,6 +100,10 @@ static const char	*localize(const char *src)
 		{"fichier généré :", "generated file:"}, {"ton fichier :", "your file:"},
 		{"fichier généré", "generated file"}, {"ton fichier", "your file"},
 		{" Ko", " KB"}, {" Mo", " MB"},
+		{"la Bible entière", "the whole Bible"}, {"la Bible, début", "the Bible, start"},
+		{"le début de la Bible", "the start of the Bible"}, {"la Bible", "the Bible"},
+		{"4,3 Mo", "4.3 MB"},
+		{"100 Ko : buffer > 10 000", "100 KB: buffer > 10 000"},
 		/* push_swap */
 		{"nombres", "numbers"}, {"coups", "moves"}, {"aléatoires", "random"},
 		{"inversé", "reversed"}, {"trié", "sorted"},

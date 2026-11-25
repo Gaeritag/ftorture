@@ -269,6 +269,12 @@ caractères, une de 10 000, la dernière sans `\n`. Avec `--file`, le timeout pa
 grandit avec la taille du fichier et rapetisse avec le `BUFFER_SIZE` (10 s + ~10 µs par
 `read()`, 10 min max) ; `--timeout` le remplace.
 
+**La Bible** : chaque passe lit aussi la Bible King James (4,3 Mo, 99 594 lignes, domaine
+public, `data/bible-kjv.txt.gz`), un vrai gros fichier texte, avec une taille qui a du
+sens pour le buffer : le livre entier de 32 à 10 000 (et sans `-D`), ses premiers
+`BUFFER_SIZE × 50 000` octets en dessous de 32, ses 100 premiers Ko au-dessus de 10 000
+(une stash de cette taille recopiée après chaque ligne ferait des Go de copies).
+
 **Petits `BUFFER_SIZE` sans attendre 10 minutes** : les lignes très longues (100 000 et
 300 000 caractères) sont coupées à 4096 `read()`, donc 4096 caractères avec
 `BUFFER_SIZE=1`, toujours largement au-delà du buffer. Une stash refaite par un `strjoin`
