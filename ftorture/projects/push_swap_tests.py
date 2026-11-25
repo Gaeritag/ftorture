@@ -9,10 +9,14 @@ import re
 import signal
 import subprocess
 
-from ..runtime import Context
+from ..runtime import Context, RunnerError
 
 VALID_OPS = frozenset({"sa", "sb", "ss", "pa", "pb", "ra", "rb", "rr", "rra", "rrb", "rrr"})
 OPS_LIST = ("sa", "sb", "ss", "pa", "pb", "ra", "rb", "rr", "rra", "rrb", "rrr")
+KNOWN_SUITES = frozenset({
+    "args", "errors", "sorted", "small", "simple", "medium",
+    "complex", "adaptive", "bench", "perf100", "perf500", "checker", "ck_errors",
+})
 
 
 def _run_bin(binary: Path, args: list[str], *, cwd: Path, stdin: str = "",
@@ -186,6 +190,8 @@ def run_push_swap_suites(ctx: Context, *, bonus: bool, checker: Path | None,
 
     wanted = ({s.strip().lower() for s in ctx.options.functions.split(",") if s.strip()}
               if ctx.options.functions else None)
+    if wanted is not None and (unknown := wanted - KNOWN_SUITES):
+        raise RunnerError(t("Unknown push_swap suite: ", "Suite push_swap inconnue : ") + ", ".join(sorted(unknown)))
     part_filter = ctx.options.part
 
     def is_selected(key: str, part: int) -> bool:

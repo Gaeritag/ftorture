@@ -22,6 +22,9 @@
 extern int		g_zm_active;
 extern int		g_fail_at;
 extern int		g_armed;
+extern int		g_armed_count;
+extern int		g_zm_bad_free;
+extern char		g_zm_bad_msg[];
 void			zm_reset(void);
 int				zm_live_blocks(void);
 size_t			zm_live_bytes(void);
@@ -81,9 +84,13 @@ static void	localize_project(void)
 			else if (!strcmp(g_funcs[i].name, "pf_space"))
 				g_funcs[i].label = "flag space";
 			else if (!strcmp(g_funcs[i].name, "pf_mix"))
+				g_funcs[i].label = "mixed";
+			else if (!strcmp(g_funcs[i].name, "pf_combo"))
 				g_funcs[i].label = "combinations";
-			else if (!strcmp(g_funcs[i].name, "pf_spec"))
+			else if (!strcmp(g_funcs[i].name, "pf_edge"))
 				g_funcs[i].label = "edge cases";
+			else if (!strcmp(g_funcs[i].name, "pf_undef"))
+				g_funcs[i].label = "undefined";
 		}
 	}
 	else if (!strcmp(g_proj.name, "get_next_line"))
@@ -91,7 +98,15 @@ static void	localize_project(void)
 		g_part_names[1] = "Mandatory · BUFFER_SIZE";
 		g_part_names[2] = "Bonus · multi-fd";
 		g_proj.short_names[1] = "mandatory";
+		for (i = 0; i < NFUNCS; i++)
+			if (!strcmp(g_funcs[i].name, "bsdef"))
+				g_funcs[i].label = "no -D (default)";
 	}
+}
+
+static double	safe_dbl(double v)
+{
+	return (isfinite(v) ? v : 0.0);
 }
 
 /* ============================================================ JSONL out == */
@@ -139,8 +154,10 @@ void	zft_register(const char *func, const char *name, t_kind kind, int spec,
 			abort();
 		g_tests = nt;
 	}
-	g_tests[g_ntests++] = (t_test){func, name, kind, spec, fn, file, line,
-		g_ntests, idx};
+	int	seq = g_ntests++;
+
+	g_tests[seq] = (t_test){func, name, kind, spec, fn, file, line,
+		seq + 1, idx};
 }
 
 static int	func_index(const char *name)
@@ -182,6 +199,8 @@ typedef struct s_shm
 	int		leaks;
 	size_t	leak_bytes;
 	int		armed_count;
+	int		bad_free;
+	char	bad_msg[160];
 }	t_shm;
 
 static t_shm	*g_shm;
@@ -199,7 +218,11 @@ static void	copy_trunc(char *dst, size_t dsz, const char *src)
 	}
 	n = strlen(src);
 	if (n >= dsz)
+	{
 		n = dsz - 1;
+		while (n > 0 && (((unsigned char)src[n] & 0xC0) == 0x80))
+			n--;
+	}
 	memcpy(dst, src, n);
 	dst[n] = 0;
 }
@@ -388,6 +411,10 @@ static void	run_child(const t_test *t, int ref, int fail_at, t_run *out)
 		g_zm_active = 0;
 		g_shm->leaks = zm_live_blocks();
 		g_shm->leak_bytes = zm_live_bytes();
+		g_shm->armed_count = g_armed_count;
+		g_shm->bad_free = g_zm_bad_free;
+		if (g_zm_bad_free)
+			copy_trunc(g_shm->bad_msg, sizeof(g_shm->bad_msg), g_zm_bad_msg);
 		g_shm->done = 1;
 		_exit(0);
 	}
@@ -463,6 +490,12 @@ static void	eval_normal(const t_test *t, t_result *r)
 		set_fail(r, t->spec ? R_SPEC : R_FAIL, "✘", "exit", &a.s, 0, 0);
 		snprintf(r->msg, sizeof(r->msg), L("a appelé exit(%d)", "called exit(%d)"),
 			a.code);
+		return ;
+	}
+	if (a.s.bad_free)
+	{
+		set_fail(r, t->spec ? R_SPEC : R_FAIL, "✘", "assert", &a.s, 0, 0);
+		copy_trunc(r->msg, sizeof(r->msg), a.s.bad_msg);
 		return ;
 	}
 	if (a.s.leaks)
@@ -541,6 +574,12 @@ static void	eval_vs(const t_test *t, t_result *r)
 		copy_trunc(r->actual, sizeof(r->actual), a.s.out);
 		return ;
 	}
+	if (a.s.bad_free)
+	{
+		set_fail(r, t->spec ? R_SPEC : R_FAIL, "✘", "assert", &a.s, 0, 0);
+		copy_trunc(r->msg, sizeof(r->msg), a.s.bad_msg);
+		return ;
+	}
 	if (a.s.leaks)
 	{
 		set_fail(r, R_FAIL, "L", "leak", &a.s, 0, 0);
@@ -585,6 +624,21 @@ static void	eval_malloc(const t_test *t, t_result *r)
 			set_fail(r, R_FAIL, "M", "malloc", &m.s, 0, k);
 			snprintf(r->msg, sizeof(r->msg),
 				L("échec malloc #%d : %s", "malloc #%d fails: %s"), k, m.s.msg);
+			return ;
+		}
+		if (!m.s.done)
+		{
+			set_fail(r, R_FAIL, "M", "malloc", &m.s, 0, k);
+			snprintf(r->msg, sizeof(r->msg),
+				L("échec malloc #%d : a appelé exit(%d)",
+					"malloc #%d fails: called exit(%d)"), k, m.code);
+			return ;
+		}
+		if (m.s.bad_free)
+		{
+			set_fail(r, R_FAIL, "M", "malloc", &m.s, 0, k);
+			snprintf(r->msg, sizeof(r->msg),
+				L("échec malloc #%d : %s", "malloc #%d fails: %s"), k, m.s.bad_msg);
 			return ;
 		}
 		if (m.s.leaks)
@@ -933,7 +987,7 @@ static void	json_eff(const t_bres *r)
 	fputs("{\"label\":", stdout);
 	json_str(r->label);
 	printf(",\"pct\":%d,\"ideal\":%.9g,\"real\":%.9g,\"bound\":%s,\"score\":%s}",
-		r->pct, r->ideal, r->real, r->bound ? "true" : "false",
+		r->pct, safe_dbl(r->ideal), safe_dbl(r->real), r->bound ? "true" : "false",
 		r->score ? "true" : "false");
 }
 
@@ -1107,7 +1161,7 @@ static void	run_project_benches(void)
 			fputs("{\"type\":\"bench\",\"label\":", stdout);
 			json_str(r->label);
 			printf(",\"pct\":%d,\"ideal\":%.9g,\"real\":%.9g,\"bound\":%s,\"score\":%s}\n",
-				r->pct, r->ideal, r->real, r->bound ? "true" : "false",
+				r->pct, safe_dbl(r->ideal), safe_dbl(r->real), r->bound ? "true" : "false",
 				r->score ? "true" : "false");
 			fflush(stdout);
 		}
@@ -1237,9 +1291,11 @@ int	main(int ac, char **av)
 			"\"store\":%.9g,\"cmp\":%.9g,\"calls\":%.9g,\"ops\":%.9g,"
 			"\"digits\":%.9g,\"nodes\":%.9g,\"allocs\":%.9g,"
 			"\"big_allocs\":%.9g,\"sys\":%.9g,\"rbytes\":%.9g}\n",
-			g_hw.iters, g_hw.scan, g_hw.copy, g_hw.store, g_hw.cmp,
-			g_hw.calls, g_hw.ops, g_hw.digits, g_hw.nodes, g_hw.allocs,
-			g_hw.big_allocs, g_hw.sys, g_hw.rbytes);
+			safe_dbl(g_hw.iters), safe_dbl(g_hw.scan), safe_dbl(g_hw.copy),
+			safe_dbl(g_hw.store), safe_dbl(g_hw.cmp), safe_dbl(g_hw.calls),
+			safe_dbl(g_hw.ops), safe_dbl(g_hw.digits), safe_dbl(g_hw.nodes),
+			safe_dbl(g_hw.allocs), safe_dbl(g_hw.big_allocs),
+			safe_dbl(g_hw.sys), safe_dbl(g_hw.rbytes));
 		fflush(stdout);
 	}
 	return (g_any_bad ? 1 : 0);

@@ -416,7 +416,6 @@ class Renderer:
         ps = self.parts.setdefault(part, PartStats(part, short_name))
         ps.suites_total += 1
         if missing_msg:
-            self.total_fail += 1
             self.total_missing += 1
             term.write(f"   {term.bold}{_padv(label, label_width)}{term.reset} {term.red}✘ {missing_msg}{term.reset}\n")
             self.log_lines.append(f"[✘] {label}: {missing_msg}")
