@@ -4,8 +4,10 @@ from dataclasses import replace
 import glob
 import os
 from pathlib import Path
+import re
 import readline
 import select
+import shutil
 import sys
 import termios
 import tty
@@ -14,10 +16,13 @@ from .language import text
 from .registry import Registry
 from .runtime import Options
 
+ANSI_RE = re.compile(r"\033\[[0-?]*[ -/]*[@-~]")
+
 FONT = {
     "F": "###:#..:##.:#..:#..", "T": "###:.#.:.#.:.#.:.#.",
     "O": "###:#.#:#.#:#.#:###", "R": "##.:#.#:##.:#.#:#.#",
     "U": "#.#:#.#:#.#:#.#:###", "E": "###:#..:##.:#..:###",
+    "K": "#.#:#.#:##.:#.#:#.#",
 }
 
 
@@ -85,6 +90,83 @@ class Terminal:
         self.clear()
         self.banner(project)
         self.write(f"   {self.bold}{self.ph}{self.t(en, fr)}{self.reset}\n\n")
+
+    def inner_width(self) -> int:
+        return max(44, min(shutil.get_terminal_size((82, 24)).columns - 6, 76))
+
+    def section_bar(self, title: str) -> None:
+        width = max(4, self.inner_width() - 4 - len(title))
+        self.write(f"\n    {self.ph}▶ {self.bold}{title}{self.reset}  {self.dark}{'▀' * width}{self.reset}\n\n")
+
+    def progress_row(self, part: int, label: str, ok: int, total: int) -> str:
+        bw = max(6, self.inner_width() - 2 - 34)
+        filled = (ok * bw // total) if total else 0
+        bar_color = self.ph if ok == total else self.escape("38;5;221") if ok * 2 >= total else self.red
+        meter = f"{bar_color}{'█' * filled}{self.dark}{'░' * (bw - filled)}{self.reset}"
+        count_color = self.ph if ok == total else self.red
+        pct = (ok * 100 // total) if total else 0
+        return (f"{self.ph}P{part}{self.reset} {label:<16} "
+                f"{self.dark}▕{meter}{self.dark}▏{self.reset} "
+                f"{count_color}{ok:2d}/{total:<2d}{self.reset}  {pct:3d}%")
+
+    def pixel_rows(self, word: str, colors: tuple[int, ...], shadow: int) -> list[str]:
+        grid = {(r, i * 4 + c) for i, letter in enumerate(word)
+                for r, row in enumerate(FONT[letter].split(":"))
+                for c, pixel in enumerate(row) if pixel == "#"}
+        width = len(word) * 4
+        shadow_esc = self.escape(f"38;5;{shadow}")
+        rows = []
+        for r in range(6):
+            fg = self.escape(f"38;5;{colors[r]}")
+            line = ""
+            for c in range(width):
+                if (r, c) in grid:
+                    line += fg + "██"
+                elif (r - 1, c - 1) in grid:
+                    line += shadow_esc + "▒▒"
+                else:
+                    line += "  "
+            rows.append(line + self.reset)
+        return rows
+
+    def result_box(self, *, ok: bool, stats: list[str], headline: str,
+                   warnings: str = "", log_path: Path | None = None) -> None:
+        inner = self.inner_width()
+        title = self.t("RESULT", "RÉSULTAT")
+        top_fill = max(0, inner - 5 - len(title))
+        self.write(f"\n   {self.medium}█▀▀▀{self.inverse} {title} {self.reset}{self.medium}{'▀' * top_fill}█{self.reset}\n")
+
+        def vis_len(value: str) -> int:
+            return len(ANSI_RE.sub("", value))
+
+        def box_line(content: str = "") -> None:
+            pad = max(0, inner - 1 - vis_len(content))
+            self.write(f"   {self.medium}█{self.reset} {content}{' ' * pad}{self.medium}█{self.reset}\n")
+
+        def box_center(content: str) -> None:
+            width = vis_len(content)
+            left = max(0, (inner - width) // 2)
+            right = max(0, inner - left - width)
+            self.write(f"   {self.medium}█{self.reset}{' ' * left}{content}{' ' * right}{self.medium}█{self.reset}\n")
+
+        box_line()
+        for row in stats:
+            box_line(row)
+        box_line()
+        word = "OK" if ok else "KO"
+        colors = (46, 40, 46, 40, 46, 22) if ok else (196, 160, 196, 160, 196, 52)
+        shadow = 22 if ok else 52
+        for row in self.pixel_rows(word, colors, shadow):
+            box_center(row)
+        lead_color = self.ph if ok else self.red
+        box_center(f"{lead_color}{headline}{self.reset}")
+        if warnings:
+            box_center(f"{self.escape('38;5;221')}{warnings}{self.reset}")
+        box_line()
+        self.write(f"   {self.medium}█{'▄' * inner}█{self.reset}\n")
+        if log_path is not None:
+            self.write(f"   {self.dark}{self.t('Full details:', 'Détails complets :')} {log_path}{self.reset}\n")
+        self.write("\n")
 
 
 @contextmanager

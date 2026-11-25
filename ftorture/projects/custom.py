@@ -100,9 +100,30 @@ class CustomProject(Project):
                 terminal.write("".join("       " + line + "\n" for line in output.splitlines()))
         bad = failed + (speculative if ctx.options.speculative else 0)
         summary = f"[CUSTOM] {passed} OK · {failed} KO · {speculative} ▲"
-        terminal.write(f"\n   {terminal.inverse} {ctx.message('RESULT', 'RÉSULTAT')} {terminal.reset} {summary}\n\n")
+        amber = terminal.escape("38;5;221")
+        total = passed + failed + speculative
+        stats = [
+            terminal.progress_row(1, ctx.message("custom", "personnalisés"), passed, total),
+            "",
+            f"{terminal.dark}TESTS {terminal.reset} "
+            f"{terminal.ph}{passed} ✔{terminal.reset}  "
+            f"{terminal.red if failed else terminal.dark}{failed} ✘{terminal.reset}  "
+            f"{amber if speculative else terminal.dark}{speculative} ▲{terminal.reset}  "
+            f"{terminal.dark}/ {total}{terminal.reset}",
+        ]
+        headline = (
+            ctx.message(f"{passed}/{total} custom tests passed", f"{passed}/{total} tests personnalisés réussis")
+            if not bad else
+            ctx.message(f"{bad} problem(s) · {passed}/{total} custom tests OK",
+                        f"{bad} problème(s) · {passed}/{total} tests personnalisés OK")
+        )
+        warnings = (
+            ctx.message(f"{speculative} ▲ warning(s) to review", f"{speculative} avertissement(s) ▲ à vérifier")
+            if not ctx.options.speculative and speculative else ""
+        )
         with report.open("a", encoding="utf-8") as stream:
             stream.write(f"\nTOTAL: {summary} -> {'KO' if bad else 'OK'}\n")
+        terminal.result_box(ok=not bad, stats=stats, headline=headline, warnings=warnings, log_path=report)
         return int(bool(bad))
 
     def cleanup(self, ctx: Context) -> None:
