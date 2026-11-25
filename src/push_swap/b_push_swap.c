@@ -20,6 +20,8 @@ static void	score(int n, int sets, double excellent)
 		ps_random(g_v, n);
 		ps_exec("push_swap", ps_args(NULL, NULL, g_v, n), NULL, 0, &p);
 		ps_replay(g_v, n, p.out, p.outlen, &r);
+		if (ps_official(g_v, n, p.out, p.outlen) == 0)
+			r.sorted = 0;
 		ps_free(&p);
 		if (p.sig || r.bad || !r.sorted)
 			return ;		/* not measured: the tests report why */

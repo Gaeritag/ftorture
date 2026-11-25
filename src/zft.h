@@ -146,6 +146,9 @@ extern double	g_score_real;
 const char	*zft_path(void);
 /* 1 when the report is in English (messages written by a suite).          */
 int			zft_en(void);
+/* Call before a CHECK that fails: the failure counts as ▲ (speculative),
+   decided at run time (push_swap: a 500 list in the medium regime).       */
+void		zft_soft(void);
 
 /* ----------------------------------------------------------- assertions -- */
 __attribute__((noreturn)) void	zft_fail(const char *file, int line,

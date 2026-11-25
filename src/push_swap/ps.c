@@ -50,7 +50,10 @@ void	ps_exec(const char *prog, const char *const *args, const char *in,
 	memset(p, 0, sizeof(*p));
 	grow(&p->out, &p->outlen, &cap_o, "", 0);
 	grow(&p->err, &p->errlen, &cap_e, "", 0);
-	snprintf(path, sizeof(path), "%s/%s", zft_path(), prog);
+	if (prog[0] == '/')
+		snprintf(path, sizeof(path), "%s", prog);
+	else
+		snprintf(path, sizeof(path), "%s/%s", zft_path(), prog);
 	argv[n++] = path;
 	while (args && args[n - 1] && n < PS_MAX + 6)
 	{
@@ -496,4 +499,32 @@ void	ps_checker(const char *const *args, const char *ops, t_proc *p)
 		? "…" : "", b);
 	ps_exec("checker", args, ops, ops ? strlen(ops) : 0, p);
 	expect_alive(p, "checker");
+}
+
+/* the official checker (checker_linux), when the runner found one          */
+int	ps_official(const int *v, int n, const char *ops, size_t len)
+{
+	const char	*checker = getenv("FTORTURE_PS_CHECKER");
+	t_proc		p;
+	int			ok;
+
+	if (!checker || !*checker)
+		return (-1);
+	ps_exec(checker, ps_args(NULL, NULL, v, n), ops, len, &p);
+	ok = !strcmp(p.out, "OK\n");
+	ps_free(&p);
+	return (ok);
+}
+
+int	ps_sorts_official(const int *v, int n)
+{
+	t_proc	p;
+	int		c = ps_sorts_keep(NULL, NULL, v, n, &p);
+	int		ok = ps_official(v, n, p.out, p.outlen);
+
+	ps_free(&p);
+	CHECK(ok != 0, "%s", T("checker_linux (le checker officiel) répond KO à "
+			"cette sortie", "checker_linux (the official checker) answers KO to "
+			"this output"));
+	return (c);
 }

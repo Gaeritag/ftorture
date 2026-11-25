@@ -289,6 +289,7 @@ typedef struct s_shm
 	int			leaks;
 	size_t		leak_bytes;
 	int			armed_count;
+	int			soft;		/* zft_soft(): this failure is only speculative */
 }	t_shm;
 
 static t_shm	*g_shm;
@@ -1198,6 +1199,8 @@ static void	eval_normal(const t_test *t, int idx, t_result *r)
 	t_res	bad = t->spec ? R_SPEC : R_FAIL;
 
 	run_child(t, 0, 0, &a);
+	if (a.s.soft)
+		bad = R_SPEC;
 	if (a.sig)
 	{
 		r->res = bad;
@@ -1774,6 +1777,11 @@ void	zft_score_register(const char *func, void (*fn)(void),
 const char	*zft_path(void)
 {
 	return (o.path);
+}
+
+void	zft_soft(void)
+{
+	g_shm->soft = 1;
 }
 
 int	zft_en(void)

@@ -62,6 +62,10 @@ int			ps_sorts_keep(const char *flag, const char *flag2, const int *v,
 void		ps_error(const char *const *args);
 /* ./checker v... with ops on stdin                                         */
 void		ps_checker(const char *const *args, const char *ops, t_proc *p);
+/* official checker from FTORTURE_PS_CHECKER: 1 OK, 0 KO, -1 none         */
+int			ps_official(const int *v, int n, const char *ops, size_t len);
+/* ps_sorts on the default strategy, then also checked by checker_linux     */
+int			ps_sorts_official(const int *v, int n);
 
 /* French / English message                                                 */
 # define T(fr, en) (zft_en() ? (en) : (fr))

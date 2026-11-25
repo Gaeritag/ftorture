@@ -315,7 +315,12 @@ one per line, that leave `a` sorted and `b` empty.
   `--bench` on a sorted input.
 - **Performance** (default strategy, random lists): 5 lists of 100 numbers under 2000
   operations and 5 of 500 under 12000 (the subject's minimum); ▲ "good" (< 1500 / < 8000)
-  and "excellent" (< 700 / < 5500) on the worst of 10 / 5 lists.
+  and "excellent" (< 700 / < 5500) on the worst of 10 / 5 lists. A random list has a
+  disorder close to 0.5: when it falls in the subject's medium regime (0.2 to 0.5),
+  `--adaptive` must use its O(n√n) there, so going over the limit is only a ▲. Every sort is
+  also confirmed by the **official checker** `checker_linux` when one is found (`--checker
+  PATH`, else the project folder, then `~/Downloads`): it is copied executable into
+  `build/`, your file is left as it is.
 - **`checker` bonus**: the subject's examples, `OK` / `KO` (b not empty, empty list),
   operations on empty stacks, random lists of the 11 operations compared with the
   simulator, sorting 100 and 500 numbers, your push_swap's output, no argument; errors

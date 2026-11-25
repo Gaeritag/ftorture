@@ -603,6 +603,40 @@ class IntegrationTests(unittest.TestCase):
                          "Static globals", "EFFICIENCY", "⚡"):
                 self.assertIn(text, result.stdout)
 
+    def test_push_swap_medium_regime_over_limit_is_speculative(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            self.push_swap_fixture(directory)
+            # 12 000 extra "ra" (24 full turns of 500: still sorted) when the list
+            # is in the medium regime (0.2 <= disorder < 0.5), or always
+            for always in (False, True):
+                cond = "1" if always else "pairs && bad * 10 >= pairs * 2 && bad * 2 < pairs"
+                (directory / "push_swap.h").write_text(
+                    "#ifndef PUSH_SWAP_H\n# define PUSH_SWAP_H\n# define BREAK_HERE if (na == 500 && (" + cond
+                    + ")) for (int r = 0; r < 12000; r++) outlen += (size_t)sprintf(out + outlen, \"ra\\n\");\n#endif\n")
+                result = self.invoke("push_swap", directory, "--no-checks", "-p", "1", "-f", "perf500", "-v",
+                                     "--lang", "en", "--no-color")
+                with self.subTest(always=always):
+                    self.assertEqual(result.returncode, int(always), result.stdout + result.stderr)
+                    if not always:
+                        self.assertIn("the subject's medium regime", result.stdout)
+
+    def test_push_swap_official_checker_confirms_sorts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "ps"
+            self.push_swap_fixture(directory)
+            fake = Path(tmp) / "checker_linux"
+            # answers OK to the probe only, KO to every real sort
+            fake.write_text("#!/bin/sh\ncat >/dev/null\n[ \"$*\" = \"2 1\" ] && echo OK || echo KO\n")
+            result = self.invoke("push_swap", directory, "--no-checks", "-p", "1", "-f", "perf100", "-v",
+                                 "--checker", fake, "--lang", "en", "--no-color")
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("official checker: " + str(fake), result.stdout)
+            self.assertIn("checker_linux (the official checker) answers KO", result.stdout)
+            self.assertEqual(fake.stat().st_mode & 0o111, 0)  # the original is left as it is
+            result = self.invoke("push_swap", directory, "--no-checks", "--checker", Path(tmp) / "nope")
+            self.assertEqual(result.returncode, 2)
+
     def test_push_swap_without_bonus_rule(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

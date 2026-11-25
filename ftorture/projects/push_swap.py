@@ -1,5 +1,8 @@
 """push_swap: build the student's binaries with make, run the C suites on them."""
 from dataclasses import dataclass
+from pathlib import Path
+import shutil
+import subprocess
 
 from .archive import ArchiveProject
 from ..subject.push_swap import push_swap_checks
@@ -14,6 +17,33 @@ class PushSwapProject(ArchiveProject):
             raise RunnerError(f"{ctx.options.directory}: Makefile " + ctx.message("not found", "introuvable"))
         if ctx.options.part is not None and ctx.options.part not in self.parts:
             raise RunnerError(ctx.message("Invalid part for", "Partie invalide pour") + f" {self.name}")
+
+    def official_checker(self, ctx: Context) -> tuple[Path | None, str]:
+        """The 42 checker_linux, copied executable into build/ (the original is
+        left as it is). Returns (copy, where it came from) or (None, reason)."""
+        if ctx.options.checker:
+            candidates = [Path(ctx.options.checker).expanduser()]
+        else:
+            candidates = [ctx.options.directory / "checker_linux", ctx.root / "checker_linux",
+                          Path.home() / "Downloads/checker_linux", Path.home() / "Téléchargements/checker_linux"]
+        source = next((path for path in candidates if path.is_file()), None)
+        if source is None:
+            if ctx.options.checker:
+                raise RunnerError(f"--checker: {ctx.options.checker} " + ctx.message("not found", "introuvable"))
+            return None, ctx.message("checker_linux not found (--checker PATH)",
+                                     "checker_linux introuvable (--checker CHEMIN)")
+        copy = ctx.build / "checker_linux"
+        ctx.build.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, copy)
+        copy.chmod(0o755)
+        try:
+            probe = subprocess.run([str(copy), "2", "1"], input="sa\n", capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            probe = None
+        if probe is None or probe.stdout != "OK\n":
+            return None, ctx.message(f"{source} does not answer OK to a valid sort",
+                                     f"{source} ne répond pas OK à un tri valide")
+        return copy, str(source)
 
     def checks(self, ctx: Context) -> None:
         push_swap_checks(ctx, self)
@@ -52,6 +82,14 @@ class PushSwapProject(ArchiveProject):
             args.extend(["--timeout", "20"])
         if note:
             args.extend(["--note", note])
+        checker, where = self.official_checker(ctx)
+        if checker:
+            ctx.env["FTORTURE_PS_CHECKER"] = str(checker)
+            print("   ▶ " + ctx.message("official checker: ", "checker officiel : ") + where
+                  + ctx.message(" (confirms the 100 / 500 sorts)", " (confirme les tris de 100 / 500)"), flush=True)
+        else:
+            ctx.env.pop("FTORTURE_PS_CHECKER", None)
+            print("   ▶ " + where, flush=True)
         return max(failed, ctx.tester(executable, args, checks=True))
 
     def cleanup(self, ctx: Context) -> None:

@@ -304,7 +304,12 @@ rra rrb rrr`), une par ligne, qui laissent `a` trié et `b` vide.
   une entrée triée.
 - **Performances** (stratégie par défaut, listes aléatoires) : 5 listes de 100 nombres
   sous 2000 opérations et 5 de 500 sous 12000 (minimum du sujet) ; ▲ « bien » (< 1500 /
-  < 8000) et « excellent » (< 700 / < 5500) sur le pire cas de 10 / 5 listes.
+  < 8000) et « excellent » (< 700 / < 5500) sur le pire cas de 10 / 5 listes. Une liste
+  aléatoire a un désordre proche de 0.5 : si elle tombe dans le régime medium du sujet
+  (0.2 à 0.5), `--adaptive` doit y utiliser son O(n√n), donc dépasser la limite n'y est
+  qu'un ▲. Chaque tri est aussi confirmé par le **checker officiel** `checker_linux` s'il
+  est trouvé (`--checker CHEMIN`, sinon le dossier du projet, puis `~/Downloads`) : il est
+  copié exécutable dans `build/`, ton fichier n'est pas modifié.
 - **Bonus `checker`** : les exemples du sujet, `OK` / `KO` (b non vide, liste vide),
   opérations sur piles vides, listes aléatoires des 11 opérations comparées au simulateur,
   tri de 100 et 500 nombres, la sortie de ton push_swap, sans argument ; erreurs

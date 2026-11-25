@@ -87,6 +87,9 @@ def parser(lang: str) -> argparse.ArgumentParser:
     result.add_argument("-f", "--func", help=t(
         "function filter; gnl: any BUFFER_SIZE list (1,42,77,100k,def)",
         "filtre de fonctions ; gnl : n'importe quels BUFFER_SIZE (1,42,77,100k,def)"))
+    result.add_argument("--checker", metavar="PATH", help=t(
+        "push_swap: official checker_linux used to confirm the sorts (default: project folder, then ~/Downloads)",
+        "push_swap : checker_linux officiel qui confirme les tris (défaut : dossier du projet, puis ~/Downloads)"))
     result.add_argument("--file", dest="files", action="append", default=[], metavar="FILE|SIZE", help=t(
         "gnl: test only your own file, or a generated file of that size (64k, 2M); repeatable, comma-separated",
         "gnl : tester seulement ton fichier, ou un fichier généré de cette taille (64k, 2M) ; répétable, séparé par des virgules"))
@@ -189,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
                           seed=args.seed, part=args.part, functions=args.func, timeout=args.timeout,
                           no_color=args.no_color, ignore_hidden=args.no_hidden,
                           files=tuple(item for value in args.files for item in value.split(",") if item.strip()),
+                          checker=args.checker,
                           repro=args.repro, gdb=args.gdb)
         if args.gdb and not args.repro:
             cli.error("--gdb needs --repro")

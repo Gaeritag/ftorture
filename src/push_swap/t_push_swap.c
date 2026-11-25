@@ -487,9 +487,25 @@ static void	perf_one(int n, int limit, int set)
 	int	c;
 
 	/* every test starts from the same seed: skip to its own list */
+	double	d;
+
 	while (set-- >= 0)
 		ps_random(g_v, n);
-	c = ps_sorts(NULL, NULL, g_v, n);
+	c = ps_sorts_official(g_v, n);
+	d = ps_disorder_of(g_v, n);
+	/* a random list is near 0.5 of disorder: about one in two falls in the
+	   subject's medium regime (0.2 to 0.5), where --adaptive must use its
+	   O(n√n) method, which may need more: only a ▲ there                    */
+	if (c >= limit && d >= 0.2 && d < 0.5)
+	{
+		zft_soft();
+		zft_failf(__FILE__, __LINE__, T("%d opérations pour %d nombres (minimum : "
+				"moins de %d), mais le désordre est %.4f : régime medium du sujet "
+				"(0.2 à 0.5), où --adaptive doit utiliser son O(n√n)", "%d "
+				"operations for %d numbers (minimum: fewer than %d), but the disorder "
+				"is %.4f: the subject's medium regime (0.2 to 0.5), where --adaptive "
+				"must use its O(n√n)"), c, n, limit, d);
+	}
 	CHECK(c < limit, T("%d opérations pour %d nombres (minimum pour valider : "
 			"moins de %d)", "%d operations for %d numbers (minimum to pass: "
 			"fewer than %d)"), c, n, limit);
@@ -505,7 +521,7 @@ static void	perf_tier(int n, int sets, int limit, const char *tier)
 		int	c;
 
 		ps_random(g_v, n);
-		c = ps_sorts(NULL, NULL, g_v, n);
+		c = ps_sorts_official(g_v, n);
 		if (c > worst)
 			worst = c;
 	}
