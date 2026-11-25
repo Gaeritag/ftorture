@@ -108,11 +108,11 @@ def run_script_file(ctx: Context, directory: Path, rel_path: str, *,
 
 
 def _render_checks(terminal, checks_file: Path, strict: bool,
-                   report_lines: list[str]) -> tuple[int, int]:
-    """Render checks.txt in the retro TUI style; returns (ko_count, warn_count)."""
+                   report_lines: list[str]) -> tuple[int, int, int]:
+    """Render checks.txt in the retro TUI style; returns (ok_count, ko_count, warn_count)."""
     if not checks_file.is_file():
-        return 0, 0
-    ko = warn = 0
+        return 0, 0, 0
+    ok = ko = warn = 0
     for raw in checks_file.read_text(encoding="utf-8", errors="replace").splitlines():
         parts = raw.split("|")
         if not parts:
@@ -120,12 +120,13 @@ def _render_checks(terminal, checks_file: Path, strict: bool,
         kind = parts[0]
         if kind == "S" and len(parts) >= 2:
             title = parts[1]
-            terminal.write(f"\n   {terminal.bold}{terminal.ph}── {title} ──{terminal.reset}\n")
+            terminal.section_bar(title)
             report_lines.append(f"\n== {title} ==")
         elif kind == "C" and len(parts) >= 4:
             status, label, detail = parts[1], parts[2], parts[3]
             if status == "OK":
                 mark, color = "✔", terminal.ph
+                ok += 1
             elif status == "KO":
                 mark, color = "✘", terminal.red
                 ko += 1
@@ -140,7 +141,7 @@ def _render_checks(terminal, checks_file: Path, strict: bool,
         elif kind == "D" and len(parts) >= 2:
             terminal.write(f"       {terminal.dark}{parts[1]}{terminal.reset}\n")
             report_lines.append(f"    {parts[1]}")
-    return ko, warn
+    return ok, ko, warn
 
 
 @dataclass(frozen=True)
@@ -213,53 +214,70 @@ class PythonProject(Project):
         from ..ui import Terminal
         terminal = Terminal(ctx.options.lang, ctx.options.no_color)
         report_lines = [f"{self.name} (subject v{self.subject})", f"Path: {ctx.options.directory}"]
-        check_ko = check_warn = 0
+        check_ok = check_ko = check_warn = 0
         if ctx.options.checks:
-            check_ko, check_warn = _render_checks(terminal, ctx.checks_file, ctx.options.speculative, report_lines)
+            check_ok, check_ko, check_warn = _render_checks(
+                terminal, ctx.checks_file, ctx.options.speculative, report_lines
+            )
 
-        terminal.write(f"\n   {terminal.bold}{terminal.ph}── "
-                       f"{ctx.message('TESTS', 'TESTS')} ──{terminal.reset}\n")
+        amber = terminal.escape("38;5;221")
+        terminal.write(
+            f"\n   {terminal.dark}{ctx.message('Legend', 'Légende')}{terminal.reset}  "
+            f"{terminal.ph}✔{terminal.reset} ok   "
+            f"{terminal.red}✘{terminal.reset} {ctx.message('error', 'erreur')}   "
+            f"{terminal.red}T{terminal.reset} timeout   "
+            f"{amber}▲{terminal.reset} {ctx.message('speculative', 'spéculatif')}\n"
+        )
+        terminal.section_bar(ctx.message("PART 1 · Exercises", "PARTIE 1 · Exercices"))
         report_lines.append("\n== TESTS ==")
 
         passed = failed = speculative = 0
+        suites_ok = suites_missing = 0
+        selected = self.selected_suites(ctx)
         directory = ctx.options.directory
         base_timeout = ctx.options.timeout or self.default_timeout
 
-        for suite in self.selected_suites(ctx):
+        for suite in selected:
             missing = [rel for rel in suite.files if not (directory / rel).is_file()]
             if missing:
                 failed += 1
+                suites_missing += 1
                 msg = ctx.message("missing: ", "absent : ") + ", ".join(missing)
-                terminal.write(f"   {terminal.red}✘{terminal.reset} {suite.label:<30} {terminal.red}{msg}{terminal.reset}\n")
+                terminal.write(f"   {suite.label:<30} {terminal.red}✘ {msg}{terminal.reset}\n")
                 report_lines.append(f"[✘] {suite.label}: {msg}")
                 continue
 
             marks: list[str] = []
             failures: list[tuple[str, PyTestCase, PyOutcome]] = []
-            suite_ok = True
+            s_pass = s_fail = s_spec = 0
             for case in suite.cases:
                 timeout = ctx.options.timeout or case.timeout or base_timeout
                 outcome = case.runner(ctx, directory, timeout)
                 if outcome.ok:
                     passed += 1
+                    s_pass += 1
                     marks.append(f"{terminal.ph}✔{terminal.reset}")
                     report_lines.append(f"  [✔] {suite.key}: {ctx.message(case.name_en, case.name_fr)}")
                 elif case.speculative:
                     speculative += 1
-                    marks.append(f"{terminal.escape('38;5;221')}▲{terminal.reset}")
+                    s_spec += 1
+                    marks.append(f"{amber}▲{terminal.reset}")
                     failures.append(("▲", case, outcome))
                     report_lines.append(f"  [▲] {suite.key}: {ctx.message(case.name_en, case.name_fr)} — {outcome.detail}")
                 else:
                     failed += 1
-                    suite_ok = False
+                    s_fail += 1
                     sym = "T" if outcome.timed_out else "✘"
                     marks.append(f"{terminal.red}{sym}{terminal.reset}")
                     failures.append((sym, case, outcome))
                     report_lines.append(f"  [{sym}] {suite.key}: {ctx.message(case.name_en, case.name_fr)} — {outcome.detail}")
 
-            lead_color = terminal.ph if suite_ok else terminal.red
-            lead_mark = "✔" if suite_ok else "✘"
-            terminal.write(f"   {lead_color}{lead_mark}{terminal.reset} {suite.label:<30} {' '.join(marks)}\n")
+            suite_ok = not s_fail and not (ctx.options.speculative and s_spec)
+            if suite_ok:
+                suites_ok += 1
+            s_total = len(suite.cases)
+            spec_note = f" {amber}({s_spec} ▲){terminal.reset}" if s_spec else ""
+            terminal.write(f"   {suite.label:<30} {' '.join(marks)}  {s_pass}/{s_total}{spec_note}\n")
 
             for sym, case, outcome in failures:
                 label = ctx.message(case.name_en, case.name_fr)
@@ -270,7 +288,7 @@ class PythonProject(Project):
                 if outcome.actual:
                     report_lines.append(f"      actual:   {outcome.actual}")
                 if ctx.options.verbose:
-                    c = terminal.escape("38;5;221") if sym == "▲" else terminal.red
+                    c = amber if sym == "▲" else terminal.red
                     terminal.write(f"       {c}{sym}{terminal.reset} {label}")
                     if outcome.detail:
                         terminal.write(f" — {terminal.dark}{outcome.detail}{terminal.reset}")
@@ -286,16 +304,49 @@ class PythonProject(Project):
         bad_tests = failed + (speculative if ctx.options.speculative else 0)
         bad = bad_checks + bad_tests
         verdict = "KO" if bad else "OK"
-        verdict_color = terminal.red if bad else terminal.ph
         summary = f"{passed} OK · {failed} KO · {speculative} ▲"
         if ctx.options.checks:
-            summary += f"  |  checks: {check_ko} KO · {check_warn} ▲"
-        terminal.write(
-            f"\n   {terminal.inverse} {ctx.message('RESULT', 'RÉSULTAT')} {terminal.reset} "
-            f"{verdict_color}{terminal.bold}{verdict}{terminal.reset}  {summary}\n\n"
+            summary += f"  |  checks: {check_ok} OK · {check_ko} KO · {check_warn} ▲"
+        total = passed + failed + speculative
+        suites_total = len(selected)
+        stats = [
+            terminal.progress_row(1, ctx.message("exercises", "exercices"), suites_ok, suites_total),
+            "",
+            f"{terminal.dark}TESTS {terminal.reset} "
+            f"{terminal.ph}{passed} ✔{terminal.reset}  "
+            f"{terminal.red if failed else terminal.dark}{failed} ✘{terminal.reset}  "
+            f"{amber if speculative else terminal.dark}{speculative} ▲{terminal.reset}  "
+            f"{terminal.dark}/ {total}{terminal.reset}",
+        ]
+        if suites_missing:
+            stats.append(
+                f"{terminal.dark}{ctx.message('MISSING', 'ABSENT ')}{terminal.reset} "
+                f"{terminal.red}{suites_missing} {ctx.message('exercise(s)', 'exercice(s)')}{terminal.reset}"
+            )
+        if ctx.options.checks:
+            stats.append(
+                f"{terminal.dark}CHECKS{terminal.reset} "
+                f"{terminal.ph}{check_ok} ✔{terminal.reset}  "
+                f"{terminal.red if check_ko else terminal.dark}{check_ko} ✘{terminal.reset}  "
+                f"{amber if check_warn else terminal.dark}{check_warn} ▲{terminal.reset}"
+            )
+        headline = (
+            ctx.message(f"{suites_ok}/{suites_total} perfect exercises · no errors",
+                        f"{suites_ok}/{suites_total} exercices parfaits · aucune erreur")
+            if not bad else
+            ctx.message(f"{bad} problem(s) · {suites_ok}/{suites_total} exercises OK",
+                        f"{bad} problème(s) · {suites_ok}/{suites_total} exercices OK")
         )
+        warn_count = speculative + check_warn
+        warnings = (
+            ctx.message(f"{warn_count} speculative ▲ warnings to review",
+                        f"{warn_count} avertissement(s) ▲ à savoir défendre")
+            if not ctx.options.speculative and warn_count else ""
+        )
+        log_path = ctx.root / "ftorture.log"
         report_lines.append(f"\nTOTAL: {summary} -> {verdict}\n")
-        (ctx.root / "ftorture.log").write_text("\n".join(report_lines), encoding="utf-8")
+        log_path.write_text("\n".join(report_lines), encoding="utf-8")
+        terminal.result_box(ok=not bad, stats=stats, headline=headline, warnings=warnings, log_path=log_path)
         return int(bool(bad))
 
 

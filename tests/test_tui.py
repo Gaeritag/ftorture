@@ -262,3 +262,18 @@ class TuiTests(unittest.TestCase):
         self.assertIn("AVERTISSEMENT", out_fr.getvalue())
         self.assertIn("ne remplace jamais ta propre vérification humaine", out_fr.getvalue())
         self.assertNotIn("\033", out_fr.getvalue())
+
+    def test_result_box_renders_big_pixel_ok_and_ko(self):
+        out_ok = io.StringIO()
+        with redirect_stdout(out_ok):
+            Terminal("en", no_color=True).result_box(ok=True, stats=["TESTS 5 ✔"], headline="5/5 OK")
+        self.assertIn("█▀▀▀ RESULT ", out_ok.getvalue())
+        self.assertIn("██████  ██  ██", out_ok.getvalue())
+        self.assertIn("██▒▒██▒▒████  ▒▒", out_ok.getvalue())
+
+        out_ko = io.StringIO()
+        with redirect_stdout(out_ko):
+            Terminal("fr", no_color=True).result_box(ok=False, stats=["TESTS 0 ✔  1 ✘"], headline="1 problème(s)")
+        self.assertIn("█▀▀▀ RÉSULTAT ", out_ko.getvalue())
+        self.assertIn("██  ██  ██████", out_ko.getvalue())
+        self.assertIn("████  ▒▒██▒▒██▒▒", out_ko.getvalue())
