@@ -19,10 +19,13 @@ Use this skill when changing **ftorture**, not a student's submission. Installat
 | `ftorture/projects/archive.py` | Makefile/archive building and linking; compare `libft.py`/`printf.py` |
 | `ftorture/projects/gnl.py` | Example source-only strategy with multiple compiled test passes |
 | `ftorture/projects/push_swap.py` | Example executable strategy: `make`/`make bonus` build binaries, C suites fork/exec them |
+| `ftorture/projects/python.py` | Reusable isolated Python test runner (`PythonProject`, `PySuite`, `PyTestCase`, subprocess helpers) |
+| `ftorture/projects/py00.py`, `py01.py` | Bundled 42 Python modules (*Growing Code* v3.0, *Code Cultivation* v3.2) |
+| `ftorture/repro.py`, `src/repro.c` | `--repro` / `--gdb` single-test C replay without fork (valgrind/gdb friendly) |
 | `ftorture/runtime.py` | `Options`, `Context`, subprocess cancellation, paths, compiler flags and C-engine arguments |
 | `ftorture/language.py` | English/French selection from locale and complete-message selection |
-| `ftorture/checks.py` | `CheckSession` probes/localized messages and delimiter-safe `CheckReport` records |
-| `ftorture/subject/` | Native file, README, norm, include-use, symbol, prototype and project-specific checks |
+| `ftorture/checks.py` | `CheckSession` probes/localized messages (`soft=True` for `-c/--chill`) and delimiter-safe `CheckReport` records |
+| `ftorture/subject/` | Native file, README, norm, include-use, symbol, prototype, `.gitignore`, Python AST/flake8/mypy (`python.py`) and project-specific checks |
 | `install.py` | Managed launcher, safe update, confirmed `--delete --confirm` uninstall, shell detection and consent-based PATH configuration |
 | `src/zft.h`, `src/project.h` | C test macros/helpers and suite descriptor contract |
 | `src/engine.c`, `src/memtrack.c` | Forked execution, reference comparison, efficiency benchmarks, allocation instrumentation and reports |
@@ -41,7 +44,16 @@ Use `CheckSession(ctx)` and persist `session.report.write(ctx.checks_file)` in `
 
 Reuse `check_files(session, allowed_predicate)`, `check_readme`, `check_norm`, `IncludeAnalysis(session).run()`, and `check_symbols` from `ftorture/subject/` with explicit subject policies. The existing `allowed_path` and archive/GNL check orchestrators encode current projects, not arbitrary new subjects. Use `self.find_header(directory)` rather than `directory / header` (set `nested=False` on a project whose subject imposes root files), and `session.compiler` already passes every header folder as `-I`. Walk student files only through `project_files` (file, include and norminette checks do): it respects `--no-hidden` (`ctx.options.ignore_hidden`) and the folder's `.gitignore` rules (`ftorture/subject/gitignore.py`, a git-compatible matcher that needs no git or repository). Do not `rglob` the student folder for submission checks; `make clean` leftovers are the exception, since cleaning must remove ignored `.o` files too. If using `check_prototypes`, supply `protos/<key>.txt` entries as `name|function-pointer type|displayed prototype`; `linked_list=True` is specifically libft's layout requirement. Include-use analysis is heuristic: unresolved headers must not be invented into failures.
 
-`CheckReport` writes engine records through `section`, `check` (`OK`, `KO`, `WARN`, `SKIP`), `detail`, `prototype`, and `end_prototypes`; do not hand-concatenate delimiters. Missing or wrong requirements are check failures, not operational exceptions. Use `RunnerError` for an inability to build/run/check, and preserve status semantics: `0` pass, `1` tests/checks failed, `2` operational error, `130` interruption.
+`CheckReport` writes engine records through `section`, `check` (`OK`, `KO`, `WARN`, `SKIP`), `detail`, `prototype`, and `end_prototypes`; do not hand-concatenate delimiters. Pass `soft=True` to `session.check(...)` for style/hygiene checks that `-c`/`--chill` should downgrade from `KO` to `WARN`. Missing or wrong requirements are check failures, not operational exceptions. Use `RunnerError` for an inability to build/run/check, and preserve status semantics: `0` pass, `1` tests/checks failed, `2` operational error, `130` interruption.
+
+## Add a Python project tester
+
+42 Python modules (`py00`, `py01`, future `py02`…) use the native Python test framework instead of the C engine:
+
+1. Define `SPECS: tuple[ExerciseSpec, ...]` in `ftorture/projects/<key>.py` describing each exercise's directory, expected `.py` files, authorized built-ins (`frozenset[str]`), `allowed_imports`, `allow_classes`, `allow_main_block`, `require_main_block`, and `require_type_hints`.
+2. Define `SUITES: tuple[PySuite, ...]` with `PyTestCase` entries. Always execute student code in isolated child `python3` subprocesses via `eval_module_code`, `expect_json_outcome`, or `run_script_file` from `ftorture/projects/python.py`: they set `PYTHONDONTWRITEBYTECODE=1` (never polluting student folders with `__pycache__`), use `start_new_session=True` for clean timeout/Ctrl-C teardown, and load modules via `importlib.util.spec_from_file_location`.
+3. Instantiate `PROJECT = PythonProject(key=..., name=..., header="", subject=..., aliases=..., specs=SPECS, suites=SUITES, check_naming_conventions=...)` and register it in `ftorture/projects/__init__.py`. `PythonProject.matches()` auto-detects the project from `SPECS` marker files (no header needed), `requires_compiler=False` skips C tool checks and adapts the TUI options screen (`flake8 / mypy`, no `-e`), and `repro.py` rejects `--repro` cleanly.
+4. Add menu descriptions/taglines in `ftorture/ui.py` and add unit/integration tests in `tests/test_python_projects.py` (update the custom-suite shortcut index in `tests/test_tui.py` when adding bundled projects).
 
 ## Write and link C suites
 

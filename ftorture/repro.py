@@ -94,7 +94,7 @@ def student_objects(ctx: Context, project: Project, token: Token) -> tuple[list[
 
 
 def run(ctx: Context, project: Project) -> int:
-    if project.custom:
+    if project.custom or not project.requires_compiler:
         raise RunnerError(ctx.message("--repro only works for the C suites.",
                                       "--repro ne marche que pour les suites C."))
     token = parse(ctx.options.repro or "")

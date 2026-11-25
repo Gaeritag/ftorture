@@ -84,7 +84,7 @@ class TuiTests(unittest.TestCase):
             session = self.session(tmp, ("--lang", "en", "--no-color", "--custom-tests-dir", str(manifests)))
             session.expect("[CUSTOM]")
             session.expect("q quit")
-            session.send(b"5")  # libft, printf, gnl, push_swap, then the custom suite
+            session.send(b"7")  # libft, printf, gnl, push_swap, py00, py01, then the custom suite
             session.expect("path : ")
             session.send(b"\n")
             session.expect("Enter start · q quit")
@@ -107,7 +107,7 @@ class TuiTests(unittest.TestCase):
         rows = output.getvalue().splitlines()
         self.assertEqual(rows[1], "   ██████  ██████  ██████  ████    ██████  ██  ██  ████    ██████  ")
         self.assertEqual(rows[6], "     ▒▒        ▒▒    ▒▒▒▒▒▒  ▒▒  ▒▒    ▒▒    ▒▒▒▒▒▒  ▒▒  ▒▒  ▒▒▒▒▒▒")
-        self.assertEqual(rows[7:9], ["   ▚▚ 42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP ▞▞", "   > ton code va parler_"])
+        self.assertEqual(rows[7:9], ["   ▚▚ 42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP · PYTHON ▞▞", "   > ton code va parler_"])
         self.assertNotIn("\033", output.getvalue())
 
     def test_color_palette_and_no_color_environment(self):

@@ -1,11 +1,11 @@
-# 🔥 ftorture — 42 tester: libft, ft_printf, get_next_line & push_swap
+# 🔥 ftorture — 42 tester: libft, ft_printf, get_next_line, push_swap & Python modules
 
 🇫🇷 [Version française](README.fr.md)
 
 > *Your code will talk.*
 
 **ftorture** puts your project to the question: every test runs in its own process,
-face to face with the **real** libc function. It watches how it crashes, what it leaks,
+face to face with the **real** libc function (or an isolated Python interpreter for Python modules). It watches how it crashes, what it leaks,
 and what it reads outside its memory.
 
 | Project | Subject | What is tested |
@@ -14,6 +14,8 @@ and what it reads outside its memory.
 | **ft_printf** | v12.1 | `cspdiuxX%` + bonus `-0.`, width, `# +`, ~22,000 calls compared with `printf` |
 | **get_next_line** | v14.3 | 14 `BUFFER_SIZE`s, files, stdin, pipe, `read` errors, multi-fd bonus |
 | **push_swap** | v1.2 | errors, the 4 strategies, `--bench`, 100 / 500 number thresholds, valgrind, `checker` bonus |
+| **py00** (`python-module-00`) | v3.0 | *Growing Code*: `ex0`–`ex7`, I/O, recursion, type annotations, `flake8`, `mypy`, AST checks |
+| **py01** (`python-module-01`) | v3.2 | *Code Cultivation*: `ex0`–`ex6`, OOP, encapsulation, inheritance, `flake8`, `mypy`, AST checks |
 
 Inspired by [Caesarovich/zft](https://github.com/Caesarovich/zft): a C test engine
 with modular Python orchestration. Requires **Linux**, **Python 3.10+**, `cc`,
@@ -90,6 +92,8 @@ torture gnl -f 1,42 --file mine.txt  # only your file, with these BUFFER_SIZEs
 torture gnl --file 64k,2M            # generated files of 64 KB and 2 MB
 torture push_swap ~/push_swap -e     # a push_swap (+ checker), with efficiency
 torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
+torture py00 ~/python-module-00 -v   # python-module-00 (Growing Code)
+torture py01 ~/python-module-01 -c   # python-module-01 (Code Cultivation), chill mode
 ```
 
 | Option | Effect |
@@ -100,12 +104,12 @@ torture ps -f errors,perf500 -v      # a few push_swap suites, every detail
 | `--gdb` | with `--repro`: run the test under gdb |
 | `-e`, `--efficiency [N]` | compare each function with a "perfect" time computed for this machine, gauge at the bottom, target N% (default 50) |
 | `-t`, `--target N` | efficiency target in % (1–100); turns `-e` on |
-| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: any BUFFER_SIZEs, `1,42,77,100k,def` · push_swap: `errors,simple,bench,perf100,checker…` |
+| `-f`, `--func LIST` | libft: `ft_split,itoa` · printf: `%d,%s,flag -,précision .` · gnl: any BUFFER_SIZEs, `1,42,77,100k,def` · push_swap: `errors,simple,bench,perf100,checker…` · python: `ex0,ex7,ft_plot_area` |
 | `-p`, `--part N` | libft: 1, 2 or 3 · printf / gnl / push_swap: 1 (mandatory) or 2 (bonus) |
 | `--file F\|SIZE` | gnl: test only your file (compared line by line with its content), or a generated file of that size (`64k`, `2M`, 256M max); repeatable, comma-separated |
-| `-c`, `--chill` | downgrade style/hygiene check KOs (norminette, extra files, README, includes, Makefile hygiene) to warnings (▲) |
-| `--no-checks` | skip Makefile / norm / nm / prototype checks |
-| `--no-norm` | skip norminette |
+| `-c`, `--chill` | downgrade style/hygiene check KOs (norminette, flake8/mypy, extra files, README, includes, Makefile hygiene) to warnings (▲) |
+| `--no-checks` | skip Makefile / norm / nm / prototype / Python AST checks |
+| `--no-norm` | skip norminette (C) or flake8 / mypy (Python) |
 | `--no-hidden` | ignore hidden files/folders in extra-file, include-use and norminette checks |
 | `--seed N` | fuzzing seed (default 42) |
 | `--timeout S` | per-test timeout (default 3 s, 10 s for gnl, 20 s for push_swap) |
