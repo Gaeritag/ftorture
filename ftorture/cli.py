@@ -71,7 +71,7 @@ def parser(lang: str) -> argparse.ArgumentParser:
     def t(en: str, fr: str) -> str:
         return text(lang, en, fr)
     result = argparse.ArgumentParser(prog="torture", description=t(
-        "Test 42 projects with the ftorture C engine.", "Tester les projets 42 avec le moteur C ftorture."))
+        "Test 42 C and Python projects with ftorture.", "Tester les projets 42 C et Python avec ftorture."))
     result.add_argument("target", nargs="?", help=t("project name or directory", "nom du projet ou dossier"))
     result.add_argument("directory", nargs="?", help=t("project directory", "dossier du projet"))
     result.add_argument("--lang", choices=("en", "fr"), default=lang, help=t("output language", "langue"))
@@ -97,7 +97,7 @@ def parser(lang: str) -> argparse.ArgumentParser:
         "downgrade style/hygiene check KOs to warnings",
         "passer les vérifications style/hygiène KO en avertissements"))
     result.add_argument("--no-checks", action="store_true", help=t("skip subject checks", "ignorer les vérifications du sujet"))
-    result.add_argument("--no-norm", action="store_true", help=t("skip norminette", "ignorer norminette"))
+    result.add_argument("--no-norm", action="store_true", help=t("skip norminette (or flake8/mypy)", "ignorer norminette (ou flake8/mypy)"))
     result.add_argument("--no-hidden", action="store_true", help=t("ignore hidden files and folders", "ignorer les fichiers et dossiers cachés"))
     result.add_argument("--no-color", action="store_true", help=t("disable colors", "désactiver les couleurs"))
     result.add_argument("--repro", metavar="TEST", help=t(
@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             project = project or registry.detect(directory)
         if project is None:
-            raise RunnerError(text(lang, "No supported project header found.", "Aucun en-tête de projet reconnu."))
+            raise RunnerError(text(lang, "No supported project found.", "Aucun projet reconnu dans ce dossier."))
         if options.files and project.key != "gnl":
             raise RunnerError(text(lang, "--file is for get_next_line only.", "--file ne sert qu'à get_next_line."))
         return execute(Context(ROOT, project.key, options), project)

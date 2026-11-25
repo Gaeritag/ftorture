@@ -31,6 +31,9 @@ class Project(ABC):
         from ..subject.common import find_file
         return find_file(directory, self.header, ignore_hidden=ignore_hidden)
 
+    def matches(self, directory: Path, *, ignore_hidden: bool = False) -> bool:
+        return bool(self.find_header(directory, ignore_hidden=ignore_hidden))
+
     def validate(self, ctx: Context) -> None:
         if not self.find_header(ctx.options.directory, ignore_hidden=ctx.options.ignore_hidden):
             raise RunnerError(f"{ctx.options.directory}: {self.header} " + ctx.message(

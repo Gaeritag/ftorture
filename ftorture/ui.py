@@ -65,7 +65,7 @@ class Terminal:
                 else:
                     line += "  "
             self.write(line + self.reset + "\n")
-        subtitle = "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP"
+        subtitle = "42 TESTER · LIBFT · FT_PRINTF · GET_NEXT_LINE · PUSH_SWAP · PYTHON"
         tag = self.t("> your code will talk", "> ton code va parler")
         if project:
             subtitle = f"{project.name.upper()} · {self.t('SUBJECT', 'SUJET')} v{project.subject} · LINUX"
@@ -74,7 +74,9 @@ class Terminal:
             tags = {"libft": ("> your libft will talk", "> ta libft va parler"),
                     "printf": ("> your printf will talk", "> ton printf va parler"),
                     "gnl": ("> your gnl will talk", "> ta gnl va parler"),
-                    "push_swap": ("> your push_swap will talk", "> ton push_swap va parler")}
+                    "push_swap": ("> your push_swap will talk", "> ton push_swap va parler"),
+                    "py00": ("> your python will talk", "> ton python va parler"),
+                    "py01": ("> your python will talk", "> ton python va parler")}
             tag = self.t(*tags.get(project.key, ("> your code will talk", "> ton code va parler")))
         self.write(f"   {self.medium}▚▚ {subtitle} ▞▞{self.reset}\n")
         self.write(f"   {self.ph}{tag}{self.reset}{self.escape('5')}{self.ph}_{self.reset}\n\n")
@@ -136,6 +138,9 @@ def choose_project(terminal: Terminal, registry: Registry):
         "gnl": "get_next_line · 14 BUFFER_SIZE · bonus multi-fd",
         "push_swap": terminal.t("4 strategies · --bench · 100/500 numbers · bonus checker",
                                 "4 stratégies · --bench · 100/500 nombres · bonus checker"),
+        "py00": terminal.t("Growing Code · ex0-ex7 · flake8 · mypy", "Growing Code · ex0-ex7 · flake8 · mypy"),
+        "py01": terminal.t("Code Cultivation · ex0-ex6 · OOP · flake8 · mypy",
+                           "Code Cultivation · ex0-ex6 · POO · flake8 · mypy"),
     }
     while True:
         terminal.heading("WHICH PROJECT TO TEST?", "QUEL PROJET ON TORTURE ?")
@@ -198,8 +203,8 @@ def path_input(terminal: Terminal, default: str) -> str:
 
 def choose_path(terminal: Terminal, project) -> Path:
     home_project = Path.home() / project.name
-    default = Path.cwd() if project.find_header(Path.cwd()) else home_project
-    if not project.find_header(default):
+    default = Path.cwd() if project.matches(Path.cwd()) else home_project
+    if not project.matches(default):
         default = Path.cwd()
     error = ""
     while True:
@@ -215,12 +220,15 @@ def choose_path(terminal: Terminal, project) -> Path:
             error = terminal.t("no Makefile in ", "pas de Makefile dans ") + value
         elif project.header and not project.find_header(directory):
             error = terminal.t(f"no {project.header} in ", f"pas de {project.header} dans ") + value
+        elif not project.custom and not project.header and not project.matches(directory):
+            error = terminal.t(f"no {project.name} files in ", f"aucun fichier {project.name} dans ") + value
         else:
             return directory.resolve()
         default = directory
 
 
 def choose_options(terminal: Terminal, project, options: Options) -> Options:
+    is_python = not project.custom and not project.requires_compiler
     labels = [
         terminal.t("strict mode (-s): ▲ count as errors", "mode strict (-s) : les ▲ comptent comme erreurs"),
         terminal.t("verbose (-v): all failure details", "verbose (-v) : tous les détails des échecs"),
@@ -231,14 +239,20 @@ def choose_options(terminal: Terminal, project, options: Options) -> Options:
             f"efficiency (-e): your time vs this machine's perfect time, target {options.efficiency_target}%",
             f"efficacité (-e) : ton temps face au temps parfait de la machine, objectif {options.efficiency_target} %",
         ),
-        terminal.t("checks (Makefile, nm, prototypes, README…)", "vérifications (Makefile, nm, prototypes, README…)"),
+        terminal.t("checks (files, flake8, mypy, AST…)", "vérifications (fichiers, flake8, mypy, AST…)") if is_python else terminal.t(
+            "checks (Makefile, nm, prototypes, README…)", "vérifications (Makefile, nm, prototypes, README…)"),
         terminal.t("chill mode (-c): style/hygiene check KOs become ▲", "mode chill (-c) : les vérifs style/hygiène KO deviennent ▲"),
-        "norminette", terminal.t("ignore hidden files (--no-hidden)", "ignorer les fichiers cachés (--no-hidden)"),
+        "flake8 / mypy" if is_python else "norminette",
+        terminal.t("ignore hidden files (--no-hidden)", "ignorer les fichiers cachés (--no-hidden)"),
     ]
     keys = ["speculative", "verbose", "efficiency", "checks", "chill", "norm", "ignore_hidden"]
     if project.custom:
         # Subject/norm/include switches have no meaning for user command suites.
         labels, keys = labels[:2], keys[:2]
+    elif is_python:
+        # C efficiency benchmarks do not apply to Python modules.
+        labels = [labels[0], labels[1], *labels[3:]]
+        keys = [keys[0], keys[1], *keys[3:]]
     values = [getattr(options, key) for key in keys]
     selected = len(labels)
     while True:
