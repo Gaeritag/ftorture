@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import patch
 
 from ftorture.runtime import Options
-from ftorture.ui import Terminal, complete_path
+from ftorture.ui import Terminal, complete_path, run_footer
 
 ROOT = Path(__file__).resolve().parent.parent
 CHILD = '''
@@ -228,3 +228,18 @@ class TuiTests(unittest.TestCase):
             session.expect("chemin : ")
             session.send(b"\x15\x04")
             session.finish()
+
+    def test_run_footer_disclaimer_en_and_fr(self):
+        out_en = io.StringIO()
+        with redirect_stdout(out_en):
+            run_footer(Options(directory=ROOT, lang="en", no_color=True))
+        self.assertIn("DISCLAIMER", out_en.getvalue())
+        self.assertIn("never replaces your own review", out_en.getvalue())
+        self.assertNotIn("\033", out_en.getvalue())
+
+        out_fr = io.StringIO()
+        with redirect_stdout(out_fr):
+            run_footer(Options(directory=ROOT, lang="fr", no_color=True))
+        self.assertIn("AVERTISSEMENT", out_fr.getvalue())
+        self.assertIn("ne remplace jamais ta propre vérification humaine", out_fr.getvalue())
+        self.assertNotIn("\033", out_fr.getvalue())

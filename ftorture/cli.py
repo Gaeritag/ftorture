@@ -12,7 +12,7 @@ from .language import default_language, text
 from .registry import load_registry
 from .projects.base import Project
 from .runtime import Context, Options, RunnerError
-from .ui import interactive, run_header
+from .ui import interactive, run_footer, run_header
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -136,6 +136,7 @@ def execute(ctx: Context, project: Project) -> int:
     with run_lock(ctx.root):
         ctx.build.mkdir(parents=True, exist_ok=True)
         ctx.stats.unlink(missing_ok=True)
+        completed = False
         try:
             run_header(project, ctx.options)
             if ctx.options.repro:
@@ -143,9 +144,13 @@ def execute(ctx: Context, project: Project) -> int:
                 return run_repro(ctx, project)
             if ctx.options.checks:
                 project.checks(ctx)
-            return project.run(ctx)
+            status = project.run(ctx)
+            completed = True
+            return status
         finally:
             project.cleanup(ctx)
+            if completed:
+                run_footer(ctx.options)
 
 
 def main(argv: list[str] | None = None) -> int:
