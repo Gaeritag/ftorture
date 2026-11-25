@@ -291,3 +291,21 @@ def run_header(project, options: Options) -> None:
     for label, value in ((terminal.t("project", "projet"), project.name),
                          (terminal.t("path", "chemin"), options.directory), ("mode  ", mode), ("seed  ", options.seed)):
         terminal.write(f"   {terminal.dark}{label}{terminal.reset} {value}\n")
+
+
+def run_footer(options: Options) -> None:
+    terminal = Terminal(options.lang, options.no_color)
+    amber = terminal.escape("38;5;221")
+    title = terminal.t("DISCLAIMER", "AVERTISSEMENT")
+    lines = terminal.t(
+        "ftorture is built to be ruthless and torture your code,\n"
+        "but it can still miss bugs or edge cases. It is only a tool and\n"
+        "never replaces your own review, testing, or human evaluation.",
+        "ftorture est conçu pour être impitoyable et torturer ton code,\n"
+        "mais il peut manquer des bugs ou des cas limites. Ce n'est qu'un\n"
+        "outil : il ne remplace jamais ta propre vérification humaine.",
+    ).splitlines()
+    terminal.write(f"   {amber}▲ {title}{terminal.reset} {terminal.dark}· {lines[0]}{terminal.reset}\n")
+    for line in lines[1:]:
+        terminal.write(f"     {terminal.dark}{line}{terminal.reset}\n")
+    terminal.write("\n")
