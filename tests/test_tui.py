@@ -84,7 +84,7 @@ class TuiTests(unittest.TestCase):
             session = self.session(tmp, ("--lang", "en", "--no-color", "--custom-tests-dir", str(manifests)))
             session.expect("[CUSTOM]")
             session.expect("q quit")
-            session.send(b"7")  # libft, printf, gnl, push_swap, py00, py01, then the custom suite
+            session.send(b"6")  # libft, printf, gnl, push_swap, PYTHON MODULES, then the custom suite
             session.expect("path : ")
             session.send(b"\n")
             session.expect("Enter start · q quit")
@@ -202,6 +202,25 @@ class TuiTests(unittest.TestCase):
             session.expect("SELECTED:")
             options = json.loads(session.expect("\n").strip())
             self.assertEqual(options["directory"], str(project))
+            session.finish()
+
+    def test_python_modules_have_their_own_menu(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session = self.session(tmp, ("--lang", "en", "--no-color"))
+            session.expect("PYTHON MODULES")
+            session.expect("q quit")
+            session.send(b"5")
+            session.expect("WHICH PYTHON MODULE?")
+            session.expect("q back")
+            session.send(b"q")  # back to the main menu
+            session.expect("WHICH PROJECT TO TEST?")
+            session.expect("q quit")
+            session.send(b"5")
+            session.expect("q back")
+            session.send(b"2")
+            session.expect("WHERE IS YOUR python-module-01 ?")
+            session.expect("path : ")
+            session.send(b"\x15\x04")
             session.finish()
 
     def test_arrow_keys_and_quit_restore_terminal(self):

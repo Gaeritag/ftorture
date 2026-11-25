@@ -128,10 +128,50 @@ def read_key() -> str:
         termios.tcsetattr(fd, termios.TCSANOW, saved)
 
 
+PYTHON = "python"      # the main-menu entry that opens the Python modules menu
+
+
+def is_python(project) -> bool:
+    from .projects.python import PythonProject
+    return isinstance(project, PythonProject)
+
+
+def menu(terminal: Terminal, title: tuple[str, str], rows: list[tuple[str, str, bool]],
+         selected: int, last: tuple[str, str], note: str = "") -> int | None:
+    """Arrow/j-k/digit menu. rows = (label, description, custom); a last row
+    (QUIT or BACK) follows. Returns the chosen row index, or None for the last
+    row / q."""
+    labels = rows + [(terminal.t(*last), "", False)]
+    while True:
+        terminal.heading(*title)
+        for index, (label, description, custom) in enumerate(labels):
+            shade = terminal.escape("38;5;80") if custom else terminal.medium
+            if index == selected:
+                terminal.write(f"   {terminal.inverse}▶ {label:<15}{terminal.reset} {terminal.ph}{description}{terminal.reset}\n")
+            else:
+                terminal.write(f"     {shade}{label:<15}{terminal.reset} {shade if custom else terminal.dark}{description}{terminal.reset}\n")
+        shortcuts = " ".join(str(i) for i in range(1, min(len(rows), 9) + 1))
+        terminal.write(f"\n   {terminal.dark}" + terminal.t(
+            f"↑ ↓ select · Enter confirm · {shortcuts} shortcuts · q {last[0].lower()}",
+            f"↑ ↓ choisir · Entrée valider · {shortcuts} raccourcis · q {last[1].lower()}") + terminal.reset + "\n")
+        if note:
+            terminal.write(f"   {terminal.dark}{note}{terminal.reset}\n")
+        key = read_key()
+        if key == "up":
+            selected = (selected - 1) % len(labels)
+        elif key == "down":
+            selected = (selected + 1) % len(labels)
+        elif key.isdigit() and 1 <= int(key) <= len(rows):
+            return int(key) - 1
+        elif key == "quit" or (key == "enter" and selected == len(rows)):
+            return None
+        elif key == "enter":
+            return selected
+
+
 def choose_project(terminal: Terminal, registry: Registry):
     projects = registry.projects
     guess = registry.detect(Path.cwd())
-    selected = projects.index(guess) if guess else 0
     descriptions = {
         "libft": terminal.t("libft.a · 43 functions · parts 1, 2, 3", "libft.a · 43 fonctions · parties 1, 2, 3"),
         "printf": terminal.t("libftprintf.a · cspdiuxX% · bonus -0. width # +", "libftprintf.a · cspdiuxX% · bonus -0. largeur # +"),
@@ -142,36 +182,37 @@ def choose_project(terminal: Terminal, registry: Registry):
         "py01": terminal.t("Code Cultivation · ex0-ex6 · OOP · flake8 · mypy",
                            "Code Cultivation · ex0-ex6 · POO · flake8 · mypy"),
     }
+    python = [project for project in projects if is_python(project) and not project.custom]
+    # main menu: the C projects, one entry for every Python module, then custom suites
+    entries: list = [p for p in projects if not p.custom and not is_python(p)]
+    if python:
+        entries.append(PYTHON)
+    entries += [p for p in projects if p.custom]
+
+    def row(entry) -> tuple[str, str, bool]:
+        if entry == PYTHON:
+            names = ", ".join(p.key for p in python)
+            return ("PYTHON MODULES", terminal.t(f"{len(python)} modules · {names} ›", f"{len(python)} modules · {names} ›"), False)
+        label = entry.name if entry.custom else entry.key.upper() if entry.key != "printf" else "FT_PRINTF"
+        return (label, ("[CUSTOM] " if entry.custom else "") + descriptions.get(entry.key, entry.name), entry.custom)
+
+    note = terminal.t(f"(current directory: {guess.key} detected)",
+                      f"(dossier courant : {guess.key} détecté)") if guess else ""
+    selected = entries.index(PYTHON if guess in python else guess) if guess in python or guess in entries else 0
     while True:
-        terminal.heading("WHICH PROJECT TO TEST?", "QUEL PROJET ON TORTURE ?")
-        labels = [(p.name if p.custom else p.key.upper() if p.key != "printf" else "FT_PRINTF",
-                   ("[CUSTOM] " if p.custom else "") + descriptions.get(p.key, p.name))
-                  for p in projects] + [(terminal.t("QUIT", "QUITTER"), "")]
-        for index, (label, description) in enumerate(labels):
-            shade = terminal.escape("38;5;80") if index < len(projects) and projects[index].custom else terminal.medium
-            if index == selected:
-                terminal.write(f"   {terminal.inverse}▶ {label:<12}{terminal.reset} {terminal.ph}{description}{terminal.reset}\n")
-            else:
-                terminal.write(f"     {shade}{label:<12}{terminal.reset} {shade if '[CUSTOM]' in description else terminal.dark}{description}{terminal.reset}\n")
-        shortcuts = "1 2 3" if len(projects) == 3 else " ".join(str(i) for i in range(1, min(len(projects), 9) + 1))
-        terminal.write(f"\n   {terminal.dark}" + terminal.t(
-            f"↑ ↓ select · Enter confirm · {shortcuts} shortcuts · q quit",
-            f"↑ ↓ choisir · Entrée valider · {shortcuts} raccourcis · q quitter") + terminal.reset + "\n")
-        if guess:
-            terminal.write(f"   {terminal.dark}" + terminal.t(
-                f"(current directory: {guess.key} detected)", f"(dossier courant : {guess.key} détecté)") + terminal.reset + "\n")
-        key = read_key()
-        if key == "up":
-            selected = (selected - 1) % len(labels)
-        elif key == "down":
-            selected = (selected + 1) % len(labels)
-        elif key.isdigit() and 1 <= int(key) <= len(projects):
-            return projects[int(key) - 1]
-        elif key == "quit" or (key == "enter" and selected == len(projects)):
+        choice = menu(terminal, ("WHICH PROJECT TO TEST?", "QUEL PROJET ON TORTURE ?"),
+                      [row(entry) for entry in entries], selected, ("QUIT", "QUITTER"), note)
+        if choice is None:
             terminal.clear()
             raise EOFError
-        elif key == "enter":
-            return projects[selected]
+        if entries[choice] != PYTHON:
+            return entries[choice]
+        selected = choice
+        module = menu(terminal, ("WHICH PYTHON MODULE?", "QUEL MODULE PYTHON ?"),
+                      [(p.key.upper(), f"{p.name} · " + descriptions.get(p.key, ""), False) for p in python],
+                      python.index(guess) if guess in python else 0, ("BACK", "RETOUR"), note)
+        if module is not None:
+            return python[module]
 
 
 def complete_path(value: str, state: int):

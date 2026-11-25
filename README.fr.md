@@ -64,8 +64,11 @@ torture
 
 Le TUI rétro original est conservé en Python : logo pixel, couleurs vertes et trois écrans.
 
-1. **Projet** : LIBFT, FT_PRINTF, GNL (`↑ ↓`, `j/k`, ou `1/2/3`, puis Entrée).
-   Le projet du dossier courant est présélectionné.
+1. **Projet** : LIBFT, FT_PRINTF, GNL, PUSH_SWAP, **PYTHON MODULES**, puis tes suites
+   personnalisées (`↑ ↓`, `j/k`, ou un chiffre, puis Entrée). PYTHON MODULES ouvre un
+   second menu avec chaque module Python (PY00, PY01…) ; `q` ou RETOUR revient au menu
+   principal. Le projet du dossier courant est présélectionné (dans le sous-menu pour un
+   module Python).
 2. **Chemin** : valeur par défaut modifiable, complétion Tab et nouvelle saisie en cas d'erreur.
 3. **Options** : Espace/Entrée coche le mode strict, verbose, efficacité, vérifications, norminette
    et ignorer les fichiers cachés ; sélectionner **LANCER LA TORTURE**. `q` quitte les menus.

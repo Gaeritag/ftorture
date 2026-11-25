@@ -66,8 +66,10 @@ torture
 The original retro TUI is preserved in Python, with its pixel logo, green scanlines,
 and three screens:
 
-1. **Project**: LIBFT, FT_PRINTF, GNL (`↑ ↓`, `j/k`, or `1/2/3`, then Enter).
-   The current project's header determines the default selection.
+1. **Project**: LIBFT, FT_PRINTF, GNL, PUSH_SWAP, **PYTHON MODULES**, then your custom
+   suites (`↑ ↓`, `j/k`, or a digit, then Enter). PYTHON MODULES opens a second menu with
+   each Python module (PY00, PY01…); `q` or BACK returns to the main menu. The current
+   project is preselected (in the submenu for a Python module).
 2. **Path**: editable default, Tab completion, and validation with retry.
 3. **Options**: Space/Enter toggles strict mode, verbose, efficiency, checks, norminette, and
    ignore-hidden; select **START TESTING** to run. `q` quits either menu.
